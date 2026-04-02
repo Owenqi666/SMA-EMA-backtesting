@@ -83,19 +83,39 @@ python grid_search.py
 
 Scans 200+ window combinations on the training set (2020–2022), then evaluates the best parameters on an unseen test set (2023–2024).
 
-Example output:
+Results on AAPL (2020-01-01 to 2024-12-31):
 
 ```
-Train: 755 days  |  Test: 503 days
+Loaded 1257 trading days for AAPL (2020-01-01 to 2024-12-31).
+
+Train: 754 days  |  Test: 503 days
 
 =======================================================
-       Params     Train Sharpe   Test Sharpe
+            Params  Train Sharpe   Test Sharpe
 -------------------------------------------------------
-SMA    (20, 100)          0.81          0.52
-EMA    (15,  80)          0.94          0.61
+SMA         (5, 30)          0.99          0.66
+EMA         (5, 20)          0.98          1.03
 =======================================================
 
-Overall winner (by test Sharpe): EMA  (0.61 vs 0.52)
+Top 5 SMA parameter combinations (train set):
+  Short   Long   Sharpe
+  ----------------------
+      5     30     0.99
+      5     20     0.90
+     50    100     0.89
+     15     20     0.89
+     55    100     0.86
+
+Top 5 EMA parameter combinations (train set):
+  Short   Long   Sharpe
+  ----------------------
+      5     20     0.98
+     10     20     0.86
+      5    190     0.78
+      5    200     0.78
+      5    140     0.71
+
+Overall winner (by test Sharpe): EMA  (1.03 vs 0.66)
 ```
 
 ---
