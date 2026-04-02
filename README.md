@@ -124,11 +124,13 @@ Both strategies use the same signal logic. The key insight is that we detect the
 
 **Golden cross — buy signal:** fast MA crosses above slow MA, indicating an upward trend.
 
-$$\text{short}_{t-1} \leq \text{long}_{t-1} \quad \text{and} \quad \text{short}_t > \text{long}_t \implies \text{buy}$$
+$$S_{t-1} \leq L_{t-1} \quad \text{and} \quad S_t > L_t \implies \text{buy}$$
 
 **Death cross — sell signal:** fast MA crosses below slow MA, indicating a downward trend.
 
-$$\text{short}_{t-1} \geq \text{long}_{t-1} \quad \text{and} \quad \text{short}_t < \text{long}_t \implies \text{sell}$$
+$$S_{t-1} \geq L_{t-1} \quad \text{and} \quad S_t < L_t \implies \text{sell}$$
+
+where $S_t$ is the short (fast) MA and $L_t$ is the long (slow) MA on day $t$.
 
 The strategy is fully invested when holding (all-in) and holds cash otherwise. No short selling.
 
@@ -136,21 +138,21 @@ The strategy is fully invested when holding (all-in) and holds cash otherwise. N
 
 **Strategy Return** — total return over the backtest period, with starting capital normalised to 1.0:
 
-$$\text{Strategy Return} = (\text{final\_cash} - 1) \times 100$$
+$$R_{\text{strategy}} = (C_{\text{final}} - 1) \times 100$$
 
-**Buy & Hold Return** — benchmark return from buying on day one and holding to the end:
+**Buy and Hold Return** — benchmark return from buying on day one and holding to the end:
 
-$$\text{Buy \& Hold} = \left(\frac{P_{\text{last}}}{P_{\text{first}}} - 1\right) \times 100$$
+$$R_{\text{bh}} = \left(\frac{P_{\text{last}}}{P_{\text{first}}} - 1\right) \times 100$$
 
 **Max Drawdown** — largest peak-to-trough decline in the equity curve, measuring worst-case loss:
 
-$$\text{Max Drawdown} = \max_{t} \frac{\text{peak}_t - V_t}{\text{peak}_t}, \qquad \text{peak}_t = \max_{s \leq t} V_s$$
+$$\text{MDD} = \max_{t} \frac{\text{peak}_t - V_t}{\text{peak}_t}, \qquad \text{peak}_t = \max_{s \leq t} V_s$$
 
 **Sharpe Ratio** — risk-adjusted return, measuring excess return earned per unit of risk, annualised using 252 trading days:
 
-$$\text{Sharpe} = \frac{\mu_{\text{daily}} - r_{f,\text{daily}}}{\sigma_{\text{daily}}} \times \sqrt{252}, \qquad r_{f,\text{daily}} = \frac{r_f}{252}$$
+$$\text{Sharpe} = \frac{\mu - r_f / 252}{\sigma} \times \sqrt{252}$$
 
-where $\mu_{\text{daily}}$ is the mean daily return, $\sigma_{\text{daily}}$ is its standard deviation, and $r_f = 0.05$ by default.
+where $\mu$ is the mean daily return, $\sigma$ is its standard deviation, and $r_f = 0.05$ by default.
 
 | Sharpe      | Interpretation          |
 |-------------|-------------------------|
@@ -165,9 +167,9 @@ where $\mu_{\text{daily}}$ is the mean daily return, $\sigma_{\text{daily}}$ is 
 
 `grid_search.py` performs an exhaustive search over:
 
-$$\text{short\_w} \in \{5, 10, 15, \ldots, 55\}, \qquad \text{long\_w} \in \{20, 30, 40, \ldots, 200\}$$
+$$s \in \{5, 10, 15, \ldots, 55\}, \qquad l \in \{20, 30, 40, \ldots, 200\}$$
 
-All combinations where $\text{short\_w} \geq \text{long\_w}$ are skipped. The objective function is the Sharpe ratio.
+where $s$ is the short window and $l$ is the long window. All combinations where $s \geq l$ are skipped. The objective function is the Sharpe ratio.
 
 ### Train/Test Split
 
