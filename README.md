@@ -415,10 +415,13 @@ regulatory fees and spread is captured in a single configurable `fee_rate` param
 
 At each trade execution, the fee is deducted from the position directly:
 
-- **Buy:** the number of shares received is reduced by the fee —
-  $\text{shares} = \frac{\text{cash}}{\text{price}} \times (1 - f)$
-- **Sell:** the cash proceeds are reduced by the fee —
-  $\text{cash} = \text{shares} \times \text{price} \times (1 - f)$
+- **Buy:** the number of shares received is reduced by the fee:
+  
+  $$\text{shares} = \frac{\text{cash}}{\text{price}} \times (1-f)$$
+
+- **Sell:** the cash proceeds are reduced by the fee:
+  
+  $$\text{cash} = \text{shares} \times \text{price} \times (1-f)$$
 
 where $f$ is the one-way fee rate. A complete round trip (buy then sell) therefore
 costs $1 - (1-f)^2 \approx 2f$ of the position value, which for the default rate
