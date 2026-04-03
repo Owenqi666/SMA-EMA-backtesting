@@ -286,6 +286,94 @@ where $S_t$ is the short (fast) MA and $L_t$ is the long (slow) MA on day $t$.
 The strategy is fully invested when holding (all-in) and holds cash otherwise.
 No short selling.
 
+### Trade Execution — T+1 Settlement
+
+Signal generation and trade execution are deliberately separated to reflect how US
+equity markets actually operate.
+
+Under US market convention, a trade executed on day T settles on day T+1. In practice
+this means that a crossover signal detected at the close of day T cannot be acted on
+until the open of day T+1 at the earliest. Executing at the same close price that
+generated the signal would assume knowledge of the closing price before the market
+closes — a form of lookahead bias.
+
+The backtest models this as follows:
+
+- **Day T (close):** the crossover condition is evaluated using today's and yesterday's
+  moving average values. If a golden cross or death cross is detected, a `pending_order`
+  is recorded.
+- **Day T+1 (open/close):** the pending order is executed at the day T+1 closing price
+  before any new signal logic runs for that day.
+
+```
+Day T   — moving averages cross → pending_order = 'buy'
+Day T+1 — pending order executes at day T+1 price → position opens
+```
+
+This introduces one day of execution lag relative to the signal, which is the minimum
+realistic delay for a daily strategy trading US equities. The practical effect is a
+slight reduction in strategy return compared to a same-day execution model, particularly
+during fast-moving markets where prices gap significantly overnight.
+
+If a pending order exists at the final day of the backtest with no subsequent day to
+execute on, the order is left unfilled. This reflects the reality that an unexecuted
+order at market close simply expires.
+
+### Transaction Costs
+
+Every realistic backtest must account for the friction of trading. This system models
+transaction costs as a proportional fee applied once on each side of every trade —
+once at entry (buy) and once at exit (sell).
+
+**What the fee represents**
+
+US equity markets have largely moved to zero-commission trading at the broker level.
+However, two unavoidable cost components remain. Regulatory fees — the SEC fee on
+sales and the FINRA Trading Activity Fee — are mandatory but small, together amounting
+to roughly 0.003% per trade for typical retail sizes. The more significant cost is
+the **bid-ask spread**: when buying, execution occurs at the ask price; when selling,
+at the bid. For large-cap, liquid stocks such as AAPL, NVDA, and META, this spread
+is typically 0.01%–0.05% per side under normal conditions. The combined effect of
+regulatory fees and spread is captured in a single configurable `fee_rate` parameter.
+
+**How it is applied**
+
+At each trade execution, the fee is deducted from the position directly:
+
+- **Buy:** the number of shares received is reduced by the fee —
+  $\text{shares} = \frac{\text{cash}}{\text{price}} \times (1 - f)$
+- **Sell:** the cash proceeds are reduced by the fee —
+  $\text{cash} = \text{shares} \times \text{price} \times (1 - f)$
+
+where $f$ is the one-way fee rate. A complete round trip (buy then sell) therefore
+costs $1 - (1-f)^2 \approx 2f$ of the position value, which for the default rate
+of $f = 0.05\%$ amounts to approximately 0.10% per round trip.
+
+**Default value and sensitivity**
+
+The default fee rate is set at **0.05% per side** (0.0005), which is a conservative
+estimate for a retail investor trading large-cap US equities. The rate is configurable
+at runtime — pressing Enter accepts the default, or any value can be entered directly.
+
+The fee is particularly consequential for strategies that trade frequently. Because
+SMA crossovers tend to generate more signals than EMA crossovers, the cumulative fee
+drag is systematically larger for SMA. This is visible in the `compare.py` output,
+which reports total fee cost alongside the standard performance metrics, making the
+trade-off between signal frequency and cost explicit.
+
+The fee is also applied consistently inside `grid_search.py`, meaning that the
+walk-forward optimisation selects parameters under realistic cost conditions rather
+than in a frictionless environment. Strategies with many trades are penalised in
+the Sharpe score not only through the equity drag but also through the reduced returns
+they produce, which tends to shift optimal windows toward larger values compared to
+a zero-fee run.
+
+**What is not modelled**
+
+Market impact — the price movement caused by the act of placing a large order — is
+not captured. For the position sizes implied by a normalised portfolio of 1.0,
+market impact on large-cap stocks is negligible, so this omission is reasonable.
+
 ### Performance Metrics
 
 **Strategy Return** — total return over the backtest period, with starting capital
@@ -357,9 +445,12 @@ the 2020 crash, the 2022 rate-hike bear market, and the subsequent recovery.
 
 ## Limitations
 
-- **Lookahead bias:** closing prices are used for both signal generation and trade
-  execution on the same day. In practice, execution would occur the following open.
-- **No transaction costs:** brokerage fees and slippage are not modelled.
+- **Execution price:** closing prices are used for both signal generation and trade
+  execution on T+1. In practice, execution would occur at the following day's open
+  rather than close, so the actual fill price may differ.
+- **Market impact:** large-order price impact is not modelled. For normalised
+  single-asset positions in large-cap equities this is negligible, but would
+  matter at meaningful capital sizes.
 - **Single asset:** the system is designed for one ticker at a time.
 - **US-centric risk-free rate:** `^IRX` reflects US Treasury yields. For non-US assets,
   a local equivalent should be substituted.

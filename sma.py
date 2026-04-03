@@ -40,19 +40,31 @@ def main():
             f"less than long window ({long_w})."
         )
 
+    # input fee rate
+    try:
+        fee_input = input("Fee rate per trade, one-way (e.g. 0.0005 for 0.05%, press Enter for default): ").strip()
+        fee_rate = float(fee_input) if fee_input else 0.0005
+    except ValueError:
+        sys.exit("Please enter a valid number for fee rate (e.g. 0.0005).")
+
+    if fee_rate < 0:
+        sys.exit("Error: fee rate cannot be negative.")
+
     #Download prices and run backtest
     prices = load_prices(ticker, start, end)
     short_ma = moving_average(prices, short_w)
     long_ma = moving_average(prices, long_w)
     rf = get_risk_free_rate(start, end)
-    result = backtest(prices, short_ma, long_ma, rf)
+    result = backtest(prices, short_ma, long_ma, rf, fee_rate)
 
     print(f"\nTicker: {ticker}")
+    print(f"Fee Rate (one-way): {fee_rate:.4%}")
     print(f"Strategy Return: {result['strategy_return']:+.2f}%")
     print(f"Buy & Hold Return: {result['bh_return']:+.2f}%")
     print(f"Max Drawdown: -{result['max_dd']:.2f}%")
     print(f"Sharpe Ratio: {result['sharpe']:.2f}")
     print(f"Total Trades: {result['trades']}")
+    print(f"Total Fee Cost: -{result['total_fee_cost']:.4f}  ({result['total_fee_cost'] * 100:.4f}% of starting capital)")
 
     plot_sma(prices, short_ma, long_ma, result['signals'], ticker, start, end, short_w, long_w)
 
@@ -103,51 +115,75 @@ def get_risk_free_rate(start, end):
     except Exception as e:
         sys.exit(f"Error: failed to download ^IRX ({e}).")
 
-def backtest(prices, short_ma, long_ma, rf):
-    #Trim the front of short_ma so both series are aligned to the same dates
+def backtest(prices, short_ma, long_ma, rf, fee_rate=0.0005):
+    # Trim the front of short_ma so both series are aligned to the same dates
     offset = len(prices) - len(long_ma)
     short_ma = short_ma[len(short_ma) - len(long_ma):]
 
-    #Initialize account: normalized starting capital of 1.0, no position
+    # Initialize account: normalized starting capital of 1.0, no position
     position = 0
     cash = 1.0
     shares = 0.0
     trades = 0
+    total_fee_cost = 0.0
     equity = []
     signals = []  # list of (index, 'buy'|'sell')
+    pending_order = None
 
     for i in range(len(long_ma)):
         price = prices[offset + i]
 
+        # Step 1: Execute pending order from previous day (T+1 settlement)
+        if pending_order == 'buy' and position == 0:
+            shares = cash / price
+            shares *= (1 - fee_rate)          # buy-side fee: fewer shares received
+            fee_paid = cash * fee_rate
+            total_fee_cost += fee_paid
+            cash = 0
+            position = 1
+            trades += 1
+            signals.append((offset + i, 'buy'))
+            pending_order = None
+
+        elif pending_order == 'sell' and position == 1:
+            cash = shares * price
+            cash *= (1 - fee_rate)            # sell-side fee: less cash received
+            fee_paid = shares * price * fee_rate
+            total_fee_cost += fee_paid
+            shares = 0
+            position = 0
+            trades += 1
+            signals.append((offset + i, 'sell'))
+            pending_order = None
+
+        # Step 2: Detect today's crossover signal, queue for next day
         if i > 0:
             previous_short = short_ma[i - 1]
-            previous_long = long_ma[i - 1]
-            current_short = short_ma[i]
-            current_long = long_ma[i]
+            previous_long  = long_ma[i - 1]
+            current_short  = short_ma[i]
+            current_long   = long_ma[i]
 
-            # Golden cross
-            if previous_short <= previous_long and current_short > current_long and position == 0:
-                shares = cash / price
-                cash = 0
-                position = 1
-                trades += 1
-                signals.append((offset + i, 'buy'))
+            # Golden cross — buy signal
+            if (previous_short <= previous_long
+                    and current_short > current_long
+                    and position == 0):
+                pending_order = 'buy'
 
-            # Death cross
-            elif previous_short >= previous_long and current_short < current_long and position == 1:
-                cash = shares * price
-                shares = 0
-                position = 0
-                trades += 1
-                signals.append((offset + i, 'sell'))
+            # Death cross — sell signal
+            elif (previous_short >= previous_long
+                    and current_short < current_long
+                    and position == 1):
+                pending_order = 'sell'
 
-        #Record today's total portfolio value (cash + market value of shares)
+        # Step 3: Record today's total portfolio value (cash + market value of shares)
         current_value = cash + shares * price
         equity.append(current_value)
 
     # If still holding at end of backtest, close position at last price
     if position == 1:
         cash = shares * prices[-1]
+        cash *= (1 - fee_rate)
+        total_fee_cost += shares * prices[-1] * fee_rate
 
     # Compute performance metrics
     strategy_return = (cash - 1.0) * 100
@@ -157,13 +193,14 @@ def backtest(prices, short_ma, long_ma, rf):
 
     return {
         "strategy_return": strategy_return,
-        "bh_return": bh_return,
-        "max_dd": max_dd,
-        "sharpe": sharpe,
-        "trades": trades,
-        "signals": signals,
-        "equity": equity,
-        "offset": offset,
+        "bh_return":       bh_return,
+        "max_dd":          max_dd,
+        "sharpe":          sharpe,
+        "trades":          trades,
+        "total_fee_cost":  total_fee_cost,
+        "signals":         signals,
+        "equity":          equity,
+        "offset":          offset,
     }
 
 def max_drawdown(equity):

@@ -39,6 +39,16 @@ def main():
             f"less than long window ({long_w})."
         )
 
+    # input fee rate
+    try:
+        fee_input = input("Fee rate per trade, one-way (e.g. 0.0005 for 0.05%, press Enter for default): ").strip()
+        fee_rate = float(fee_input) if fee_input else 0.0005
+    except ValueError:
+        sys.exit("Please enter a valid number for fee rate (e.g. 0.0005).")
+
+    if fee_rate < 0:
+        sys.exit("Error: fee rate cannot be negative.")
+
     # Download once, share between both strategies
     prices = load_prices(ticker, start, end)
     rf = get_risk_free_rate(start, end)
@@ -46,15 +56,15 @@ def main():
     # Run SMA backtest
     short_sma = moving_average(prices, short_w)
     long_sma = moving_average(prices, long_w)
-    sma_result = sma_backtest(prices, short_sma, long_sma, rf)
+    sma_result = sma_backtest(prices, short_sma, long_sma, rf, fee_rate)
 
     # Run EMA backtest
     short_ema = exp_moving_average(prices, short_w)
     long_ema = exp_moving_average(prices, long_w)
-    ema_result = ema_backtest(prices, short_ema, long_ema, rf)
+    ema_result = ema_backtest(prices, short_ema, long_ema, rf, fee_rate)
 
     # Print comparison table
-    print(f"\nTicker: {ticker}  |  Short window: {short_w}  |  Long window: {long_w}")
+    print(f"\nTicker: {ticker}  |  Short window: {short_w}  |  Long window: {long_w}  |  Fee rate: {fee_rate:.4%} (one-way)")
     print()
     print(f"{'Metric':<25} {'SMA':>10} {'EMA':>10}")
     print("-" * 45)
@@ -65,6 +75,7 @@ def main():
         ("Max Drawdown (%)",      "max_dd"),
         ("Sharpe Ratio",          "sharpe"),
         ("Total Trades",          "trades"),
+        ("Total Fee Cost",        "total_fee_cost"),
     ]
 
     for label, key in metrics:
@@ -75,6 +86,8 @@ def main():
             print(f"{label:<25} {sma_val:>10} {ema_val:>10}")
         elif key == "max_dd":
             print(f"{label:<25} {'-'+f'{sma_val:.2f}':>10} {'-'+f'{ema_val:.2f}':>10}")
+        elif key == "total_fee_cost":
+            print(f"{label:<25} {'-'+f'{sma_val:.4f}':>10} {'-'+f'{ema_val:.4f}':>10}")
         else:
             print(f"{label:<25} {sma_val:>10.2f} {ema_val:>10.2f}")
 
@@ -85,6 +98,7 @@ def main():
     print(f"  Max Drawdown    : {'EMA' if ema_result['max_dd'] < sma_result['max_dd'] else 'SMA'}  (lower is better)")
     print(f"  Sharpe Ratio    : {'EMA' if ema_result['sharpe'] > sma_result['sharpe'] else 'SMA'}")
     print(f"  Total Trades    : {'EMA' if ema_result['trades'] < sma_result['trades'] else 'SMA'}  (fewer is cheaper)")
+    print(f"  Fee Cost        : {'EMA' if ema_result['total_fee_cost'] < sma_result['total_fee_cost'] else 'SMA'}  (lower is better)")
 
     plot_equity_comparison(prices, sma_result, ema_result, ticker, start, end, short_w, long_w)
 

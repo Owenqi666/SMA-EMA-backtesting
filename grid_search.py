@@ -9,20 +9,20 @@ from ema import exp_moving_average, backtest as ema_backtest
 
 
 # Run a single backtest for a given strategy and return the result dict
-def run_backtest(prices, short_w, long_w, rf, strategy):
+def run_backtest(prices, short_w, long_w, rf, strategy, fee_rate=0.0005):
     if strategy == 'SMA':
         short_ma = moving_average(prices, short_w)
         long_ma  = moving_average(prices, long_w)
-        return sma_backtest(prices, short_ma, long_ma, rf)
+        return sma_backtest(prices, short_ma, long_ma, rf, fee_rate)
     else:
         short_ma = exp_moving_average(prices, short_w)
         long_ma  = exp_moving_average(prices, long_w)
-        return ema_backtest(prices, short_ma, long_ma, rf)
+        return ema_backtest(prices, short_ma, long_ma, rf, fee_rate)
 
 
 # Scan all valid (short_w, long_w) combinations using walk-forward validation
 # Each pair is scored by mean out-of-sample Sharpe across all windows
-def walk_forward(prices, rf, strategy='SMA', test_days=252, min_train_days=504):
+def walk_forward(prices, rf, strategy='SMA', fee_rate=0.0005, test_days=252, min_train_days=504):
     n = len(prices)
 
     # Build list of (train_end, test_end) index pairs
@@ -59,7 +59,7 @@ def walk_forward(prices, rf, strategy='SMA', test_days=252, min_train_days=504):
                 # Skip window if train data too short for the long window
                 if long_w >= train_end:
                     continue
-                result = run_backtest(prices[train_end:test_end], short_w, long_w, rf, strategy)
+                result = run_backtest(prices[train_end:test_end], short_w, long_w, rf, strategy, fee_rate)
                 test_sharpes.append(result['sharpe'])
 
             if not test_sharpes:
@@ -101,22 +101,33 @@ def main():
     if end_dt <= start_dt:
         sys.exit(f"Error: start date ({start}) must be before end date ({end}).")
 
+    # input fee rate
+    try:
+        fee_input = input("Fee rate per trade, one-way (e.g. 0.0005 for 0.05%, press Enter for default): ").strip()
+        fee_rate = float(fee_input) if fee_input else 0.0005
+    except ValueError:
+        sys.exit("Please enter a valid number for fee rate (e.g. 0.0005).")
+
+    if fee_rate < 0:
+        sys.exit("Error: fee rate cannot be negative.")
+
     # Download prices and risk-free rate
     prices = load_prices(ticker, start, end)
     rf     = get_risk_free_rate(start, end)
 
     print(f"\nTotal data: {len(prices)} trading days")
+    print(f"Fee rate (one-way): {fee_rate:.4%}")
 
     # Run walk-forward grid search for both strategies
     print("\nOptimising SMA via walk-forward...")
-    sma_best_params, sma_best_sharpe, sma_results = walk_forward(prices, rf, strategy='SMA')
+    sma_best_params, sma_best_sharpe, sma_results = walk_forward(prices, rf, strategy='SMA', fee_rate=fee_rate)
 
     print("\nOptimising EMA via walk-forward...")
-    ema_best_params, ema_best_sharpe, ema_results = walk_forward(prices, rf, strategy='EMA')
+    ema_best_params, ema_best_sharpe, ema_results = walk_forward(prices, rf, strategy='EMA', fee_rate=fee_rate)
 
     # Evaluate best params on full dataset
-    sma_final = run_backtest(prices, *sma_best_params, rf, 'SMA')
-    ema_final = run_backtest(prices, *ema_best_params, rf, 'EMA')
+    sma_final = run_backtest(prices, *sma_best_params, rf, 'SMA', fee_rate)
+    ema_final = run_backtest(prices, *ema_best_params, rf, 'EMA', fee_rate)
 
     # Print summary table
     print("\n" + "=" * 62)
