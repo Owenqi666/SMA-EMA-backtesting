@@ -3,6 +3,7 @@ from sma import load_prices, moving_average, backtest as sma_backtest, parse_dat
 from ema import exp_moving_average, backtest as ema_backtest
 
 
+# Run a single backtest for a given strategy and return the result dict
 def run_backtest(prices, short_w, long_w, rf, strategy):
     if strategy == 'SMA':
         short_ma = moving_average(prices, short_w)
@@ -14,9 +15,12 @@ def run_backtest(prices, short_w, long_w, rf, strategy):
         return ema_backtest(prices, short_ma, long_ma, rf)
 
 
+# Scan all valid (short_w, long_w) combinations using walk-forward validation
+# Each pair is scored by mean out-of-sample Sharpe across all windows
 def walk_forward(prices, rf, strategy='SMA', test_days=252, min_train_days=504):
     n = len(prices)
 
+    # Build list of (train_end, test_end) index pairs
     windows = []
     train_end = min_train_days
     while train_end + test_days <= n:
@@ -47,6 +51,7 @@ def walk_forward(prices, rf, strategy='SMA', test_days=252, min_train_days=504):
 
             test_sharpes = []
             for train_end, test_end in windows:
+                # Skip window if train data too short for the long window
                 if long_w >= train_end:
                     continue
                 result = run_backtest(prices[train_end:test_end], short_w, long_w, rf, strategy)
@@ -65,6 +70,7 @@ def walk_forward(prices, rf, strategy='SMA', test_days=252, min_train_days=504):
     return best_params, best_mean_sharpe, all_results
 
 
+# Print the top n parameter combinations ranked by mean test Sharpe
 def print_top_results(all_results, strategy, n=5):
     sorted_results = sorted(all_results.items(), key=lambda x: x[1], reverse=True)
     print(f"\nTop {n} {strategy} parameter combinations (mean test Sharpe):")
@@ -78,30 +84,36 @@ def main():
     print("SMA vs EMA Walk-Forward Grid Search")
     print("------------------------------------")
 
+    #input ticker
     ticker = input("Ticker (e.g. AAPL): ").strip().upper()
     if not ticker:
         sys.exit("Error: ticker cannot be empty.")
 
+    # input dates
     start, start_dt = parse_date("Start date: ")
     end, end_dt     = parse_date("End date: ")
 
     if end_dt <= start_dt:
         sys.exit(f"Error: start date ({start}) must be before end date ({end}).")
 
+    # Download prices and risk-free rate
     prices = load_prices(ticker, start, end)
     rf     = get_risk_free_rate(start, end)
 
     print(f"\nTotal data: {len(prices)} trading days")
 
+    # Run walk-forward grid search for both strategies
     print("\nOptimising SMA via walk-forward...")
     sma_best_params, sma_best_sharpe, sma_results = walk_forward(prices, rf, strategy='SMA')
 
     print("\nOptimising EMA via walk-forward...")
     ema_best_params, ema_best_sharpe, ema_results = walk_forward(prices, rf, strategy='EMA')
 
+    # Evaluate best params on full dataset
     sma_final = run_backtest(prices, *sma_best_params, rf, 'SMA')
     ema_final = run_backtest(prices, *ema_best_params, rf, 'EMA')
 
+    # Print summary table
     print("\n" + "=" * 62)
     print(f"{'':5} {'Params':>12} {'Mean Test Sharpe':>16} {'Full Sharpe':>12}")
     print("-" * 62)
@@ -112,6 +124,7 @@ def main():
     print_top_results(sma_results, 'SMA', n=5)
     print_top_results(ema_results, 'EMA', n=5)
 
+    # Overall winner by mean test Sharpe
     print()
     if sma_best_sharpe > ema_best_sharpe:
         print(f"Overall winner (by mean test Sharpe): SMA  ({sma_best_sharpe:.2f} vs {ema_best_sharpe:.2f})")
