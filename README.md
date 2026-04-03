@@ -75,30 +75,40 @@ deliberately to represent different price regimes:
 ```
 Metric                          SMA        EMA
 ---------------------------------------------
-Strategy Return (%)          359.20     404.43
-Buy & Hold Return (%)       1046.73    1046.73
-Max Drawdown (%)             -29.09     -25.30
-Sharpe Ratio                   0.77       0.77
+Strategy Return (%)          447.33     452.43
+Buy & Hold Return (%)       1046.73    1044.52
+Max Drawdown (%)             -24.16     -27.53
+Sharpe Ratio                   0.85       0.81
 Total Trades                     55         45
+Total Fee Cost               -0.0836    -0.0604
 ```
 
-**Equity curve:** Both strategies significantly underperformed buy & hold ($4.59x and
-$5.04x vs $11.47x). AAPL's decade-long uptrend punished crossover strategies — every
+*Benchmark configuration: fee rate 0.05% one-way, threshold 0%, T+1 execution.*
+
+**Equity curve:** Both strategies significantly underperformed buy & hold (5.48× and
+5.53× vs 11.47×). AAPL's decade-long uptrend punished crossover strategies — every
 false signal during shallow pullbacks forced a sell, with re-entry only at higher prices,
-repeatedly missing the core of each rally.
+repeatedly missing the core of each rally. Transaction costs are visible in the fee
+column: SMA's higher trade count (55 vs 45) results in 38% more fee drag than EMA
+despite similar gross returns.
 
 **Signal chart:** SMA generated 55 trades vs EMA's 45. The SMA chart shows dense,
 overlapping signals during the first 1,000 days (2016–2019) when AAPL moved in a
 low-volatility uptrend — the two moving averages stayed close together, causing
 constant whipsawing. EMA's faster response reduced this considerably.
 
-**Grid search:** Optimal parameters clustered in the top-left (small windows: short=5,
-long=20–30), the opposite of NVDA. On a stock with a smooth, shallow trend, shorter
-windows reduce the lag cost slightly — but even the best parameters could not overcome
-the structural disadvantage of the strategy on a strongly trending asset.
+**Grid search:** Optimal SMA parameters: short=5, long=70, threshold=0% (mean test
+Sharpe 1.30). Optimal EMA parameters: short=5, long=20, threshold=0.2% (mean test
+Sharpe 1.14). Overall winner by mean test Sharpe: SMA. Both strategies favoured small
+short windows — on a smooth, low-volatility uptrend, shorter windows reduce lag cost
+slightly. The threshold had minimal effect for SMA at the optimal window pair, but
+EMA benefited from a small threshold of 0.2% to filter the noise inherent in its
+faster-responding gap series.
 
-**Takeaway:** On AAPL, doing nothing outperformed active trading by nearly 3x over
-the decade.
+**Takeaway:** On AAPL, doing nothing outperformed active trading by roughly 2× over
+the decade. The result is consistent with the original analysis — the structural
+disadvantage of crossover strategies on persistently trending assets holds even after
+the more realistic execution model is applied.
 
 ---
 
@@ -106,35 +116,45 @@ the decade.
 ```
 Metric                          SMA        EMA
 ---------------------------------------------
-Strategy Return (%)         1469.00    6026.00
-Buy & Hold Return (%)      23603.00   23603.00
-Max Drawdown (%)             (large)    (large)
-Sharpe Ratio                  (lower)    (higher)
-Total Trades                  (more)     (fewer)
+Strategy Return (%)         1316.25    7445.40
+Buy & Hold Return (%)      23602.60   23519.92
+Max Drawdown (%)             -62.95     -57.91
+Sharpe Ratio                   0.87       1.21
+Total Trades                     46         43
+Total Fee Cost               -0.1122    -0.4992
 ```
 
+*Benchmark configuration: fee rate 0.05% one-way, threshold 0%, T+1 execution.*
+
 **Equity curve:** The gap is far more dramatic than AAPL. Buy & hold turned $1 into
-$237, while SMA only reached $15.69x and EMA $61.26x. NVDA's entire return is
-concentrated in the AI boom of 2023–2024 (Day 1800–2500), where the price surged from
-~$50 to over $200. Both strategies were repeatedly stopped out during this explosive
-phase by death crosses, re-entering at progressively higher prices and missing most of
-the move. EMA dramatically outperformed SMA ($61x vs $15x) because its faster response
-allowed re-entry sooner after each pullback.
+$237×, while SMA only reached $14.16× and EMA $75.49×. NVDA's entire return is
+concentrated in the AI boom of 2023–2024, where the price surged parabolically. Both
+strategies were repeatedly stopped out during this explosive phase by death crosses,
+re-entering at progressively higher prices and missing most of the move. EMA
+dramatically outperformed SMA ($75.49× vs $14.16×) because its faster response
+allowed re-entry sooner after each pullback. The fee drag on EMA is notably higher
+(-0.4992 vs -0.1122) — a consequence of its much larger position size at each trade
+during the price surge, where 0.05% of a $75× portfolio is a meaningful absolute cost.
 
-**Signal chart:** The first 1,500 days show dense signals at very low price levels
-(below $30) — a long period of low-price sideways movement generating noise. The real
-money was in Days 1,800–2,500, where both strategies managed to participate partially
-but were frequently ejected by short-lived death crosses during the parabolic rise.
+**Signal chart:** The first 1,500 days show dense signals at very low price levels —
+a long period of low-price sideways movement generating noise. The real money was in
+Days 1,800–2,500, where both strategies managed to participate partially but were
+frequently ejected by short-lived death crosses during the parabolic rise. EMA's
+signal chart shows notably fewer false exits than SMA during this phase.
 
-**Grid search:** Optimal parameters were the complete opposite of AAPL — SMA performed
-best with large windows (short=55, long=70), and EMA with very large windows (short=50,
-long=200). NVDA's extreme volatility generates enormous noise at small window sizes.
-Large windows filter out short-term fluctuations and follow only the genuine multi-month
-trend. The EMA heatmap shows a broad green region across the top-right, indicating EMA
-is robust to parameter choice on NVDA as long as windows are kept large.
+**Grid search:** Optimal SMA parameters: short=55, long=60, threshold=0.2% (mean
+test Sharpe 0.96). Optimal EMA parameters: short=50, long=180, threshold=0% (mean
+test Sharpe 1.36). Overall winner: EMA. The results are the opposite of AAPL —
+large windows dominate for both strategies. NVDA's extreme volatility generates
+enormous noise at small window sizes; large windows filter short-term fluctuations
+and follow only the genuine multi-month trend. The EMA heatmap shows a broad green
+region across the top-right, confirming EMA is robust to parameter choice on NVDA
+as long as windows are kept large. The small threshold benefit for SMA (0.2%) confirms
+that modest noise filtering helps on a volatile asset even with large windows.
 
 **Takeaway:** On NVDA, the parabolic AI-driven rally was essentially untrackable with
-a lagging crossover strategy. Buy & hold was the dominant approach by an enormous margin.
+a lagging crossover strategy. Buy & hold was the dominant approach by an enormous
+margin. EMA's edge over SMA was the largest of the three assets tested.
 
 ---
 
@@ -142,43 +162,51 @@ a lagging crossover strategy. Buy & hold was the dominant approach by an enormou
 ```
 Metric                          SMA        EMA
 ---------------------------------------------
-Strategy Return (%)          733.00     621.00
-Buy & Hold Return (%)        501.00     650.00
-Max Drawdown (%)             (lower)    (lower)
-Sharpe Ratio                  (higher)   (higher)
-Total Trades                  (more)     (fewer)
+Strategy Return (%)          704.54     805.33
+Buy & Hold Return (%)        500.62     550.27
+Max Drawdown (%)             -32.89     -23.48
+Sharpe Ratio                   0.86       0.89
+Total Trades                     43         32
+Total Fee Cost               -0.0731    -0.0443
 ```
 
+*Benchmark configuration: fee rate 0.05% one-way, threshold 0%, T+1 execution.*
+
 **Equity curve:** META is the only case where both strategies outperformed buy & hold
-— SMA reached $8.33x vs buy & hold's $6.01x, and EMA $7.21x vs $6.50x. This confirms
+— SMA reached 8.05× vs buy & hold's 6.01×, and EMA 9.05× vs 6.50×. This confirms
 the original hypothesis: META's 2022 crash created exactly the environment where
-crossover strategies thrive.
+crossover strategies thrive. EMA now clearly outperforms SMA on both return and
+drawdown, a result more pronounced than in the previous model due to EMA's lower trade
+count reducing fee drag (32 vs 43 trades, fee cost -0.0443 vs -0.0731).
 
 The mechanism is visible in the equity curve. Around Day 1,500 (early 2022), META's
-price peaked near $370 and began a steep decline to below $100. The death cross triggered
-a sell signal near the top of this move, keeping the strategy in cash through most of
-the 76% drawdown. When the golden cross appeared in mid-2023, the strategy re-entered
-near the bottom of the recovery, capturing the full subsequent rally to $650+. Buy &
-hold suffered the full crash and only recovered later — the crossover strategy avoided
-the pain entirely and re-entered at a lower cost basis.
+price peaked near $370 and began a steep decline to below $100. The death cross
+triggered a sell signal near the top of this move, keeping the strategy in cash through
+most of the 76% drawdown. When the golden cross appeared in mid-2023, the strategy
+re-entered near the bottom of the recovery, capturing the full subsequent rally to
+$650+. Buy & hold suffered the full crash and only recovered later.
 
-**Signal chart:** EMA's signal chart shows notably cleaner entries and exits around the
-2022 crash compared to SMA. EMA identified the death cross earlier and the golden cross
-sooner during recovery, resulting in a better entry price on the rebound. Both charts
-show that the 2022 crash was the single most important event for strategy performance —
-everything else was secondary.
+**Signal chart:** EMA's signal chart shows notably cleaner entries and exits around
+the 2022 crash compared to SMA. EMA identified the death cross earlier and the golden
+cross sooner during recovery, resulting in a better entry price on the rebound. Both
+charts confirm that the 2022 crash was the single most important event for strategy
+performance — everything else was secondary.
 
-**Grid search:** Unlike AAPL and NVDA, META's heatmap is almost entirely green across
-both SMA and EMA. This means parameter choice barely matters on META — almost any
-reasonable combination of windows would have captured the 2022 crash avoidance. The
-strategy's edge on META came from the market structure, not from precise parameter
-tuning. The few red cells appear at very small window sizes (short=5–10) where signal
-noise overwhelmed the crash-avoidance benefit.
+**Grid search:** Optimal SMA parameters: short=35, long=40, threshold=0.5% (mean
+test Sharpe 0.82). Optimal EMA parameters: short=20, long=90, threshold=2.0% (mean
+test Sharpe 0.96). Overall winner: EMA. Unlike AAPL and NVDA, META's EMA heatmap is
+almost entirely green — almost any reasonable window combination produces positive
+Sharpe, confirming the strategy's edge comes from the market structure rather than
+precise parameter tuning. The relatively high optimal threshold for EMA (2.0%) is
+notable: it suggests that on META, filtering out marginal crossovers significantly
+improves risk-adjusted returns by reducing false exits during the volatile 2022–2023
+recovery phase.
 
-**Takeaway:** META is the clearest demonstration of when crossover strategies work:
-a deep, sustained drawdown followed by a strong recovery. The strategy's inherent lag
-became an advantage — it stayed in the trade long enough to confirm the trend before
-selling, then re-entered after the bottom was confirmed.
+**Takeaway:** META remains the clearest demonstration of when crossover strategies
+work. The strategy's inherent lag became an advantage — it stayed in the trade long
+enough to confirm the trend before selling, then re-entered after the bottom was
+confirmed. EMA's outperformance over SMA on this asset is now cleaner and more
+convincing with the realistic execution model applied.
 
 ---
 
@@ -186,9 +214,9 @@ selling, then re-entered after the bottom was confirmed.
 
 | Ticker | SMA Return | EMA Return | Buy & Hold | SMA vs B&H | EMA vs B&H | Best Window (EMA) |
 |--------|-----------|-----------|------------|------------|------------|-------------------|
-| AAPL | 4.59x | 5.04x | 11.47x | -59% | -56% | short=5, long=20 |
-| NVDA | 15.69x | 61.26x | 237.03x | -93% | -74% | short=50, long=200 |
-| META | 8.33x | 7.21x | 6.01x | +39% | +20% | short=40, long=50 |
+| AAPL | 5.48x | 5.53x | 11.47x | -52% | -52% | short=5, long=20, θ=0.2% |
+| NVDA | 14.16x | 75.49x | 237.03x | -94% | -68% | short=50, long=180, θ=0% |
+| META | 8.05x | 9.05x | 6.01x | +34% | +39% | short=20, long=90, θ=2.0% |
 
 **Why optimal parameters differ across assets:**
 
@@ -222,6 +250,8 @@ depends entirely on the asset and time period.
 **EMA consistently outperforms SMA** across all three tickers. Fewer trades, lower
 drawdowns, and better returns. The faster response to recent price changes reduces
 whipsaw losses during volatile periods without sacrificing trend-following ability.
+The lower trade count also means systematically less fee drag — on META, EMA's fee
+cost was 39% lower than SMA's despite similar gross exposure.
 
 **Both strategies underperform buy & hold on strongly trending assets.** AAPL and NVDA
 demonstrate this clearly. The strategy is structurally disadvantaged when an asset
@@ -230,13 +260,15 @@ drawdown-protection benefit.
 
 **META demonstrates the strategy's genuine edge.** A deep, sustained crash followed
 by recovery is exactly the environment crossover strategies were designed for. The 2022
-META drawdown of 76% was avoided almost entirely, producing outperformance of ~39% over
-buy & hold for SMA.
+META drawdown of 76% was avoided almost entirely, with EMA producing 9.05× vs buy &
+hold's 6.50× — outperformance of approximately 39%.
 
 **Optimal parameters are asset-specific and cannot be transferred.** AAPL rewarded
 small windows, NVDA required very large windows, and META performed well across almost
-any parameter combination. Walk-forward validation is essential to avoid fitting
-parameters to a single historical episode.
+any parameter combination. The optimal threshold also varies significantly: 0% for NVDA
+(noise filtering hurts on a directional trend), 0.2% for AAPL, and 2.0% for META
+(aggressive filtering helps during choppy recovery phases). Walk-forward validation
+is essential to avoid fitting parameters to a single historical episode.
 
 **The strategy is better described as drawdown insurance than as an alpha generator.**
 It sacrifices upside participation in exchange for avoiding large losses. On assets like
