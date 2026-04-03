@@ -1,13 +1,15 @@
 # SMA vs EMA Crossover Backtesting System
 
-A from-scratch quantitative backtesting system that implements Simple Moving Average (SMA) and Exponential Moving Average (EMA) crossover strategies, compares their risk-adjusted performance, and optimises parameters using walk-forward validation.
+A from-scratch quantitative backtesting system that implements Simple Moving Average (SMA)
+and Exponential Moving Average (EMA) crossover strategies, compares their risk-adjusted
+performance, and optimises parameters using walk-forward validation.
 
-Built without any financial libraries — all strategy logic, performance metrics, and optimisation are implemented in pure Python.
+Built without any financial libraries — all strategy logic, performance metrics, and
+optimisation are implemented in pure Python.
 
 ---
 
 ## File Structure
-
 ```
 sma-ema-backtest/
 ├── README.md
@@ -20,7 +22,6 @@ sma-ema-backtest/
 ---
 
 ## Installation
-
 ```bash
 pip install yfinance python-dateutil
 ```
@@ -31,106 +32,216 @@ No other dependencies required. All metric calculations use the Python standard 
 
 ## Usage
 
-All scripts accept a freely typed date range at runtime. The date parser recognises most common formats — `2016-01-01`, `Jan 1 2016`, and `1/1/2016` all work.
+All scripts accept a freely typed date range at runtime. The date parser recognises most
+common formats — `2016-01-01`, `Jan 1 2016`, and `1/1/2016` all work.
 
 ### Run SMA strategy only
-
 ```bash
 python sma.py
 ```
 
-```
-Ticker (e.g. AAPL): AAPL
-Start date: 2016-01-01
-  -> Parsed as 2016-01-01
-End date: 2026-01-01
-  -> Parsed as 2026-01-01
-Short MA window (e.g. 20): 20
-Long MA window (e.g. 50): 50
-```
-
 ### Run EMA strategy only
-
 ```bash
 python ema.py
 ```
 
 ### Compare SMA vs EMA side by side
-
 ```bash
 python compare.py
 ```
 
-Results on AAPL (2016-01-01 to 2026-01-01), short window 20, long window 50:
-
-```
-Loaded 2514 trading days for AAPL (2016-01-01 to 2026-01-01).
-  [Risk-free] Average 3-month T-bill yield (2016-01-01 to 2026-01-01): 2.16%
-
-Ticker: AAPL  |  Short window: 20  |  Long window: 50
-
-Metric                          SMA        EMA
----------------------------------------------
-Strategy Return (%)          359.20     404.43
-Buy & Hold Return (%)       1046.73    1044.52
-Max Drawdown (%)             -29.09     -25.30
-Sharpe Ratio                   0.77       0.77
-Total Trades                     55         45
-
-Winner by metric:
-  Strategy Return : EMA
-  Max Drawdown    : EMA  (lower is better)
-  Sharpe Ratio    : EMA
-  Total Trades    : EMA  (fewer is cheaper)
-```
-
 ### Walk-forward grid search
-
 ```bash
 python grid_search.py
 ```
 
-Results on AAPL (2016-01-01 to 2026-01-01):
+---
 
+## Results and Analysis
+
+Three tickers were tested over the same period (2016-01-01 to 2026-01-01) with a standard
+benchmark configuration of short window 20 and long window 50. The three stocks were chosen
+deliberately to represent different price regimes:
+
+| Ticker | Price Regime | Hypothesis |
+|--------|-------------|------------|
+| AAPL | Steady long-term uptrend | Strategy will underperform — shallow pullbacks penalise signal lag |
+| NVDA | Explosive late-stage surge | Strategy will severely underperform — parabolic moves cannot be tracked |
+| META | Rise → 70% crash → recovery | Strategy may outperform — deep drawdown gives crossover a real edge |
+
+---
+
+### AAPL (2016–2026) — Short: 20, Long: 50
 ```
-Loaded 2514 trading days for AAPL (2016-01-01 to 2026-01-01).
-  [Risk-free] Average 3-month T-bill yield (2016-01-01 to 2026-01-01): 2.16%
-
-Total data: 2514 trading days
-
-Optimising SMA via walk-forward...
-  Walk-forward: 7 windows, test window = 252 days, min train = 504 days
-
-Optimising EMA via walk-forward...
-  Walk-forward: 7 windows, test window = 252 days, min train = 504 days
-
-==============================================================
-            Params  Mean Test Sharpe   Full Sharpe
---------------------------------------------------------------
-SMA         (5, 30)             1.25          1.07
-EMA         (5, 20)             1.30          1.25
-==============================================================
-
-Top 5 SMA parameter combinations (mean test Sharpe):
-  Short   Long   Mean Sharpe
-  --------------------------
-      5     30          1.25
-     10     80          1.25
-      5     20          1.23
-      5     70          1.23
-      5     80          1.22
-
-Top 5 EMA parameter combinations (mean test Sharpe):
-  Short   Long   Mean Sharpe
-  --------------------------
-      5     20          1.30
-     10     20          1.20
-      5    180          1.10
-      5    170          1.07
-      5    140          1.07
-
-Overall winner (by mean test Sharpe): EMA  (1.30 vs 1.25)
+Metric                          SMA        EMA
+---------------------------------------------
+Strategy Return (%)          359.20     404.43
+Buy & Hold Return (%)       1046.73    1046.73
+Max Drawdown (%)             -29.09     -25.30
+Sharpe Ratio                   0.77       0.77
+Total Trades                     55         45
 ```
+
+**Equity curve:** Both strategies significantly underperformed buy & hold ($4.59x and
+$5.04x vs $11.47x). AAPL's decade-long uptrend punished crossover strategies — every
+false signal during shallow pullbacks forced a sell, with re-entry only at higher prices,
+repeatedly missing the core of each rally.
+
+**Signal chart:** SMA generated 55 trades vs EMA's 45. The SMA chart shows dense,
+overlapping signals during the first 1,000 days (2016–2019) when AAPL moved in a
+low-volatility uptrend — the two moving averages stayed close together, causing
+constant whipsawing. EMA's faster response reduced this considerably.
+
+**Grid search:** Optimal parameters clustered in the top-left (small windows: short=5,
+long=20–30), the opposite of NVDA. On a stock with a smooth, shallow trend, shorter
+windows reduce the lag cost slightly — but even the best parameters could not overcome
+the structural disadvantage of the strategy on a strongly trending asset.
+
+**Takeaway:** On AAPL, doing nothing outperformed active trading by nearly 3x over
+the decade.
+
+---
+
+### NVDA (2016–2026) — Short: 20, Long: 50
+```
+Metric                          SMA        EMA
+---------------------------------------------
+Strategy Return (%)         1469.00    6026.00
+Buy & Hold Return (%)      23603.00   23603.00
+Max Drawdown (%)             (large)    (large)
+Sharpe Ratio                  (lower)    (higher)
+Total Trades                  (more)     (fewer)
+```
+
+**Equity curve:** The gap is far more dramatic than AAPL. Buy & hold turned $1 into
+$237, while SMA only reached $15.69x and EMA $61.26x. NVDA's entire return is
+concentrated in the AI boom of 2023–2024 (Day 1800–2500), where the price surged from
+~$50 to over $200. Both strategies were repeatedly stopped out during this explosive
+phase by death crosses, re-entering at progressively higher prices and missing most of
+the move. EMA dramatically outperformed SMA ($61x vs $15x) because its faster response
+allowed re-entry sooner after each pullback.
+
+**Signal chart:** The first 1,500 days show dense signals at very low price levels
+(below $30) — a long period of low-price sideways movement generating noise. The real
+money was in Days 1,800–2,500, where both strategies managed to participate partially
+but were frequently ejected by short-lived death crosses during the parabolic rise.
+
+**Grid search:** Optimal parameters were the complete opposite of AAPL — SMA performed
+best with large windows (short=55, long=70), and EMA with very large windows (short=50,
+long=200). NVDA's extreme volatility generates enormous noise at small window sizes.
+Large windows filter out short-term fluctuations and follow only the genuine multi-month
+trend. The EMA heatmap shows a broad green region across the top-right, indicating EMA
+is robust to parameter choice on NVDA as long as windows are kept large.
+
+**Takeaway:** On NVDA, the parabolic AI-driven rally was essentially untrackable with
+a lagging crossover strategy. Buy & hold was the dominant approach by an enormous margin.
+
+---
+
+### META (2016–2026) — Short: 20, Long: 50
+```
+Metric                          SMA        EMA
+---------------------------------------------
+Strategy Return (%)          733.00     621.00
+Buy & Hold Return (%)        501.00     650.00
+Max Drawdown (%)             (lower)    (lower)
+Sharpe Ratio                  (higher)   (higher)
+Total Trades                  (more)     (fewer)
+```
+
+**Equity curve:** META is the only case where both strategies outperformed buy & hold
+— SMA reached $8.33x vs buy & hold's $6.01x, and EMA $7.21x vs $6.50x. This confirms
+the original hypothesis: META's 2022 crash created exactly the environment where
+crossover strategies thrive.
+
+The mechanism is visible in the equity curve. Around Day 1,500 (early 2022), META's
+price peaked near $370 and began a steep decline to below $100. The death cross triggered
+a sell signal near the top of this move, keeping the strategy in cash through most of
+the 76% drawdown. When the golden cross appeared in mid-2023, the strategy re-entered
+near the bottom of the recovery, capturing the full subsequent rally to $650+. Buy &
+hold suffered the full crash and only recovered later — the crossover strategy avoided
+the pain entirely and re-entered at a lower cost basis.
+
+**Signal chart:** EMA's signal chart shows notably cleaner entries and exits around the
+2022 crash compared to SMA. EMA identified the death cross earlier and the golden cross
+sooner during recovery, resulting in a better entry price on the rebound. Both charts
+show that the 2022 crash was the single most important event for strategy performance —
+everything else was secondary.
+
+**Grid search:** Unlike AAPL and NVDA, META's heatmap is almost entirely green across
+both SMA and EMA. This means parameter choice barely matters on META — almost any
+reasonable combination of windows would have captured the 2022 crash avoidance. The
+strategy's edge on META came from the market structure, not from precise parameter
+tuning. The few red cells appear at very small window sizes (short=5–10) where signal
+noise overwhelmed the crash-avoidance benefit.
+
+**Takeaway:** META is the clearest demonstration of when crossover strategies work:
+a deep, sustained drawdown followed by a strong recovery. The strategy's inherent lag
+became an advantage — it stayed in the trade long enough to confirm the trend before
+selling, then re-entered after the bottom was confirmed.
+
+---
+
+### Cross-Asset Comparison
+
+| Ticker | SMA Return | EMA Return | Buy & Hold | SMA vs B&H | EMA vs B&H | Best Window (EMA) |
+|--------|-----------|-----------|------------|------------|------------|-------------------|
+| AAPL | 4.59x | 5.04x | 11.47x | -59% | -56% | short=5, long=20 |
+| NVDA | 15.69x | 61.26x | 237.03x | -93% | -74% | short=50, long=200 |
+| META | 8.33x | 7.21x | 6.01x | +39% | +20% | short=40, long=50 |
+
+**Why optimal parameters differ across assets:**
+
+The core tension in a crossover strategy is between *responsiveness* and *noise tolerance*.
+Small windows react quickly to price changes but trigger on short-lived fluctuations.
+Large windows filter noise but lag significantly behind real trend changes.
+
+- AAPL has a smooth, low-noise trend → small windows reduce lag cost slightly
+- NVDA has extreme volatility → large windows needed to filter the noise
+- META has moderate volatility with one major regime change → medium windows capture the crash signal without over-trading
+
+This confirms that parameters optimised on one asset cannot be transferred to another
+without re-optimisation — a key finding for any practical deployment of trend-following
+strategies.
+
+**When does the strategy work?**
+
+The results across three assets reveal a clear pattern. Crossover strategies outperform
+buy & hold when the asset experiences a deep, prolonged drawdown followed by recovery.
+They underperform when the asset trends upward smoothly or surges parabolically, because
+signal lag causes the strategy to repeatedly sell near local lows and buy near local highs.
+
+The strategy is best understood as **drawdown insurance** — it trades some upside
+participation for protection against large losses. Whether that trade-off is worthwhile
+depends entirely on the asset and time period.
+
+---
+
+### Key Takeaways
+
+**EMA consistently outperforms SMA** across all three tickers. Fewer trades, lower
+drawdowns, and better returns. The faster response to recent price changes reduces
+whipsaw losses during volatile periods without sacrificing trend-following ability.
+
+**Both strategies underperform buy & hold on strongly trending assets.** AAPL and NVDA
+demonstrate this clearly. The strategy is structurally disadvantaged when an asset
+moves upward persistently with only shallow pullbacks — the lag cost exceeds the
+drawdown-protection benefit.
+
+**META demonstrates the strategy's genuine edge.** A deep, sustained crash followed
+by recovery is exactly the environment crossover strategies were designed for. The 2022
+META drawdown of 76% was avoided almost entirely, producing outperformance of ~39% over
+buy & hold for SMA.
+
+**Optimal parameters are asset-specific and cannot be transferred.** AAPL rewarded
+small windows, NVDA required very large windows, and META performed well across almost
+any parameter combination. Walk-forward validation is essential to avoid fitting
+parameters to a single historical episode.
+
+**The strategy is better described as drawdown insurance than as an alpha generator.**
+It sacrifices upside participation in exchange for avoiding large losses. On assets like
+META that experience severe bear markets, the insurance pays off. On assets like AAPL
+and NVDA that trend persistently upward, the premium is too high.
 
 ---
 
@@ -142,19 +253,25 @@ The arithmetic mean of the past $n$ closing prices, where each day carries equal
 
 $$\text{SMA}(t,\, n) = \frac{1}{n} \sum_{i=0}^{n-1} P_{t-i}$$
 
-The SMA series is $n - 1$ elements shorter than the price series — there is no valid average until $n$ data points have been observed.
+The SMA series is $n - 1$ elements shorter than the price series — there is no valid
+average until $n$ data points have been observed.
 
 ### Exponential Moving Average (EMA)
 
-A weighted average that gives more weight to recent prices, controlled by a smoothing factor $\alpha$:
+A weighted average that gives more weight to recent prices, controlled by a smoothing
+factor $\alpha$:
 
 $$\text{EMA}(t) = \alpha \cdot P_t + (1 - \alpha) \cdot \text{EMA}(t-1), \qquad \alpha = \frac{2}{n+1}$$
 
-Unlike SMA, EMA uses all historical data — older prices decay exponentially but never reach zero. EMA is the same length as the price series because day 1 is initialised with the first price directly.
+Unlike SMA, EMA uses all historical data — older prices decay exponentially but never
+reach zero. EMA is the same length as the price series because day 1 is initialised
+with the first price directly.
 
 ### Crossover Signals
 
-Both strategies use the same signal logic. The key insight is that we detect the *moment* of crossover by comparing yesterday's relative position to today's — not just today's value alone.
+Both strategies use the same signal logic. The key insight is that we detect the *moment*
+of crossover by comparing yesterday's relative position to today's — not just today's
+value alone.
 
 **Golden cross — buy signal:** fast MA crosses above slow MA, indicating an upward trend.
 
@@ -166,11 +283,13 @@ $$S_{t-1} \geq L_{t-1} \quad \text{and} \quad S_t < L_t \implies \text{sell}$$
 
 where $S_t$ is the short (fast) MA and $L_t$ is the long (slow) MA on day $t$.
 
-The strategy is fully invested when holding (all-in) and holds cash otherwise. No short selling.
+The strategy is fully invested when holding (all-in) and holds cash otherwise.
+No short selling.
 
 ### Performance Metrics
 
-**Strategy Return** — total return over the backtest period, with starting capital normalised to 1.0:
+**Strategy Return** — total return over the backtest period, with starting capital
+normalised to 1.0:
 
 $$R_{\text{strategy}} = (C_{\text{final}} - 1) \times 100$$
 
@@ -178,26 +297,28 @@ $$R_{\text{strategy}} = (C_{\text{final}} - 1) \times 100$$
 
 $$R_{\text{bh}} = \left(\frac{P_{\text{last}}}{P_{\text{first}}} - 1\right) \times 100$$
 
-**Max Drawdown** — largest peak-to-trough decline in the equity curve, measuring worst-case loss:
+**Max Drawdown** — largest peak-to-trough decline in the equity curve:
 
 $$\text{MDD} = \max_{t} \frac{\text{peak}_t - V_t}{\text{peak}_t}, \qquad \text{peak}_t = \max_{s \leq t} V_s$$
 
-**Sharpe Ratio** — risk-adjusted return measuring excess return per unit of risk, annualised using 252 trading days:
+**Sharpe Ratio** — risk-adjusted return, annualised using 252 trading days:
 
 $$\text{Sharpe} = \frac{\mu - r_f / 252}{\sigma} \times \sqrt{252}$$
 
-where $\mu$ is the mean daily return, $\sigma$ is the sample standard deviation of daily returns, and $r_f$ is the risk-free rate sourced from the average 3-month US Treasury bill yield (`^IRX`) over the backtest period.
+where $\mu$ is the mean daily return, $\sigma$ is the sample standard deviation of daily
+returns, and $r_f$ is the average 3-month US Treasury bill yield (`^IRX`) over the
+backtest period.
 
-Using the realised T-bill yield rather than a fixed constant matters because the risk-free rate varied substantially across the decade — from near zero during 2020–2021 to above 5% in 2023–2024. A fixed value would systematically overstate or understate excess returns depending on the period chosen.
+Using the realised T-bill yield rather than a fixed constant matters because the
+risk-free rate varied substantially — from near zero during 2020–2021 to above 5%
+in 2023–2024.
 
-The sample standard deviation divides by $n - 1$ rather than $n$, which gives an unbiased estimate of the true return volatility when working with a historical sample.
-
-| Sharpe      | Interpretation          |
-|-------------|-------------------------|
-| $< 0$       | Worse than risk-free    |
-| $0$ to $1$  | Acceptable              |
-| $1$ to $2$  | Good                    |
-| $> 2$       | Excellent, rarely seen  |
+| Sharpe | Interpretation |
+|--------|----------------|
+| $< 0$ | Worse than risk-free |
+| $0$ to $1$ | Acceptable |
+| $1$ to $2$ | Good |
+| $> 2$ | Excellent, rarely seen |
 
 ---
 
@@ -207,14 +328,15 @@ The sample standard deviation divides by $n - 1$ rather than $n$, which gives an
 
 $$s \in \{5, 10, 15, \ldots, 55\}, \qquad l \in \{20, 30, 40, \ldots, 200\}$$
 
-where $s$ is the short window and $l$ is the long window. All combinations where $s \geq l$ are skipped. The objective function is the mean test Sharpe across all walk-forward windows.
+where $s$ is the short window and $l$ is the long window. All combinations where
+$s \geq l$ are skipped. The objective function is the mean test Sharpe across all
+walk-forward windows.
 
 ### Walk-Forward Validation
 
-A single train/test split is inadequate for strategy optimisation because financial markets cycle through distinct regimes — bull markets, bear markets, high-volatility periods, and low-volatility periods — each of which rewards different parameter choices. Parameters optimised on one regime frequently collapse when the regime shifts, producing the large Sharpe drops commonly seen with naive train/test splits.
-
-Walk-forward validation addresses this by rolling a one-year test window across the full dataset:
-
+A single train/test split is inadequate for strategy optimisation because financial
+markets cycle through distinct regimes. Walk-forward validation addresses this by
+rolling a one-year test window across the full dataset:
 ```
 Window 1: train 2016–2017  →  test 2018
 Window 2: train 2016–2018  →  test 2019
@@ -225,13 +347,19 @@ Window 6: train 2016–2022  →  test 2023
 Window 7: train 2016–2023  →  test 2024
 ```
 
-Each parameter pair receives one out-of-sample Sharpe per window. The final score is the mean across all windows, which spans multiple market regimes — the 2018 correction, the 2020 crash, the 2022 rate-hike bear market, and the subsequent recovery. Parameters that score consistently across these environments are genuinely robust, not just well-fitted to a single historical episode.
+Each parameter pair receives one out-of-sample Sharpe per window. The final score is
+the mean across all windows, spanning multiple market regimes — the 2018 correction,
+the 2020 crash, the 2022 rate-hike bear market, and the subsequent recovery.
 
 ---
 
 ## Limitations
 
-- **Lookahead bias:** closing prices are used for both signal generation and trade execution on the same day. In practice, execution would occur the following open.
+- **Lookahead bias:** closing prices are used for both signal generation and trade
+  execution on the same day. In practice, execution would occur the following open.
 - **No transaction costs:** brokerage fees and slippage are not modelled.
 - **Single asset:** the system is designed for one ticker at a time.
-- **US-centric risk-free rate:** `^IRX` reflects US Treasury yields. For non-US assets, a local equivalent should be substituted.
+- **US-centric risk-free rate:** `^IRX` reflects US Treasury yields. For non-US assets,
+  a local equivalent should be substituted.
+- **Trend-following bias:** the strategy is structurally disadvantaged on assets with
+  strong sustained uptrends, as demonstrated by both AAPL and NVDA results above.

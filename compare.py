@@ -1,4 +1,8 @@
 import sys
+import os
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 from sma import load_prices, moving_average, backtest as sma_backtest, parse_date, get_risk_free_rate
 from ema import exp_moving_average, backtest as ema_backtest
 
@@ -81,6 +85,72 @@ def main():
     print(f"  Max Drawdown    : {'EMA' if ema_result['max_dd'] < sma_result['max_dd'] else 'SMA'}  (lower is better)")
     print(f"  Sharpe Ratio    : {'EMA' if ema_result['sharpe'] > sma_result['sharpe'] else 'SMA'}")
     print(f"  Total Trades    : {'EMA' if ema_result['trades'] < sma_result['trades'] else 'SMA'}  (fewer is cheaper)")
+
+    plot_equity_comparison(prices, sma_result, ema_result, ticker, start, end, short_w, long_w)
+
+
+def plot_equity_comparison(prices, sma_result, ema_result, ticker, start, end, short_w, long_w):
+    """Side-by-side equity curves: SMA vs EMA, each vs buy-and-hold."""
+    BG      = "#0f1117"
+    PANEL   = "#1a202c"
+    GRID    = "#2d3748"
+    TEXT    = "#e2e8f0"
+    MUTED   = "#718096"
+
+    def build_bh(equity, offset, prices):
+        """Build a buy-and-hold curve aligned to the equity curve."""
+        n = len(equity)
+        p0 = prices[offset]
+        return [prices[offset + i] / p0 for i in range(n)]
+
+    sma_equity = sma_result['equity']
+    ema_equity = ema_result['equity']
+    sma_bh = build_bh(sma_equity, sma_result['offset'], prices)
+    ema_bh = build_bh(ema_equity, ema_result['offset'], prices)
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6), sharey=False)
+    fig.patch.set_facecolor(BG)
+    fig.suptitle(f"{ticker}  |  Equity Curve Comparison  |  {start} → {end}  "
+                 f"|  Short: {short_w}  Long: {long_w}",
+                 color=TEXT, fontsize=12, y=1.01)
+
+    configs = [
+        (axes[0], sma_equity, sma_bh, "#63b3ed", "SMA Strategy"),
+        (axes[1], ema_equity, ema_bh, "#76e4f7", "EMA Strategy"),
+    ]
+
+    for ax, equity, bh, strat_color, title in configs:
+        ax.set_facecolor(PANEL)
+        x = list(range(len(equity)))
+        ax.plot(x, equity, color=strat_color, linewidth=1.8, label=title)
+        ax.plot(x, bh,     color="#f6ad55",   linewidth=1.4, linestyle="--",
+                label="Buy & Hold", alpha=0.85)
+        ax.axhline(1.0, color=GRID, linewidth=0.8, linestyle=":")
+
+        final_strat = equity[-1]
+        final_bh    = bh[-1]
+        ax.annotate(f"{final_strat:.2f}×", xy=(len(equity)-1, final_strat),
+                    color=strat_color, fontsize=8, va='bottom')
+        ax.annotate(f"{final_bh:.2f}×",   xy=(len(bh)-1, final_bh),
+                    color="#f6ad55", fontsize=8, va='top')
+
+        for spine in ax.spines.values():
+            spine.set_edgecolor(GRID)
+        ax.tick_params(colors=MUTED, labelsize=8)
+        ax.set_xlabel("Trading Days", color=MUTED, fontsize=9)
+        ax.set_ylabel("Portfolio Value (normalised)", color=MUTED, fontsize=9)
+        ax.set_title(title, color=TEXT, fontsize=11, pad=8)
+        ax.legend(facecolor="#0f1117", edgecolor=GRID, labelcolor=TEXT, fontsize=8)
+        ax.grid(True, color=GRID, linewidth=0.5, linestyle="--", alpha=0.5)
+
+    plt.tight_layout()
+    os.makedirs("images", exist_ok=True)
+    s = start[:10].replace("-", "_")
+    e = end[:10].replace("-", "_")
+    fname = f"images/{ticker}_{s}_{e}_compare.png"
+    fig.savefig(fname, dpi=150, bbox_inches="tight", facecolor=BG)
+    plt.close(fig)
+    print(f"\n  [Chart saved] {fname}")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,11 @@
 import sys
 import math
+import os
 import yfinance as yf
 from dateutil import parser as dateparser
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 def main():
     print("Exponential Moving Average Crossover Backtest")
@@ -48,6 +52,8 @@ def main():
     print(f"Max Drawdown: -{result['max_dd']:.2f}%")
     print(f"Sharpe Ratio: {result['sharpe']:.2f}")
     print(f"Total Trades: {result['trades']}")
+
+    plot_ema(prices, short_ema, long_ema, result['signals'], ticker, start, end, short_w, long_w)
 
 def parse_date(prompt):
     raw = input(prompt).strip()
@@ -108,6 +114,7 @@ def backtest(prices, short_ema, long_ema, rf):
     shares = 0.0
     trades = 0
     equity = []
+    signals = []  # list of (index, 'buy'|'sell')
 
     for i in range(len(long_ema)):
         price = prices[offset + i]
@@ -124,6 +131,7 @@ def backtest(prices, short_ema, long_ema, rf):
                 cash = 0
                 position = 1
                 trades += 1
+                signals.append((offset + i, 'buy'))
 
             # Death cross
             elif previous_short >= previous_long and current_short < current_long and position == 1:
@@ -131,6 +139,7 @@ def backtest(prices, short_ema, long_ema, rf):
                 shares = 0
                 position = 0
                 trades += 1
+                signals.append((offset + i, 'sell'))
 
         #Record today's total portfolio value
         current_value = cash + shares * price
@@ -153,6 +162,7 @@ def backtest(prices, short_ema, long_ema, rf):
         "trades": trades,
         "equity": equity,
         "offset": offset,
+        "signals": signals,
     }
 
 def max_drawdown(equity):
@@ -181,6 +191,49 @@ def sharpe_ratio(equity, rf):
     if std == 0:
         return 0.0
     return (excess / std) * math.sqrt(252)
+
+def plot_ema(prices, short_ema, long_ema, signals, ticker, start, end, short_w, long_w):
+    """Plot price, short EMA, long EMA with buy/sell arrows. Saves to images/."""
+    n = len(prices)
+    x = list(range(n))
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    fig.patch.set_facecolor("#0f1117")
+    ax.set_facecolor("#0f1117")
+
+    ax.plot(x, prices,     color="#a0aec0", linewidth=1.0, label="Close Price", alpha=0.8)
+    ax.plot(x, short_ema,  color="#76e4f7", linewidth=1.4, label=f"EMA({short_w})")
+    ax.plot(x, long_ema,   color="#f6ad55", linewidth=1.4, label=f"EMA({long_w})")
+
+    for idx, kind in signals:
+        price_at = prices[idx]
+        if kind == 'buy':
+            ax.plot(idx, price_at * 0.975, marker='^', color='#68d391', markersize=9, zorder=5)
+        else:
+            ax.plot(idx, price_at * 1.025, marker='v', color='#fc8181', markersize=9, zorder=5)
+
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#2d3748")
+    ax.tick_params(colors="#718096")
+    ax.set_xlabel("Trading Days", color="#718096")
+    ax.set_ylabel("Price (USD)", color="#718096")
+    ax.set_title(f"{ticker}  |  EMA Crossover  |  {start} → {end}",
+                 color="#e2e8f0", fontsize=13, pad=12)
+    ax.legend(facecolor="#1a202c", edgecolor="#2d3748", labelcolor="#e2e8f0", fontsize=9)
+    ax.grid(True, color="#2d3748", linewidth=0.5, linestyle="--", alpha=0.6)
+
+    _save_figure(fig, ticker, start, end, "ema")
+
+
+def _save_figure(fig, ticker, start, end, label):
+    os.makedirs("images", exist_ok=True)
+    s = start[:10].replace("-", "_")
+    e = end[:10].replace("-", "_")
+    fname = f"images/{ticker}_{s}_{e}_{label}.png"
+    fig.savefig(fname, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close(fig)
+    print(f"  [Chart saved] {fname}")
+
 
 if __name__ == "__main__":
     main()

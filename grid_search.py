@@ -1,4 +1,9 @@
 import sys
+import os
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
 from sma import load_prices, moving_average, backtest as sma_backtest, parse_date, get_risk_free_rate
 from ema import exp_moving_average, backtest as ema_backtest
 
@@ -132,6 +137,81 @@ def main():
         print(f"Overall winner (by mean test Sharpe): EMA  ({ema_best_sharpe:.2f} vs {sma_best_sharpe:.2f})")
     else:
         print("Draw: both strategies achieved the same mean test Sharpe.")
+
+    plot_heatmaps(sma_results, ema_results, ticker, start, end)
+
+
+def plot_heatmaps(sma_results, ema_results, ticker, start, end):
+    """Plot side-by-side heatmaps of mean test Sharpe for SMA and EMA."""
+    BG   = "#0f1117"
+    TEXT = "#e2e8f0"
+    MUTED = "#718096"
+
+    short_range = sorted(set(k[0] for k in sma_results))
+    long_range  = sorted(set(k[1] for k in sma_results))
+
+    def build_matrix(results, short_range, long_range):
+        mat = np.full((len(short_range), len(long_range)), np.nan)
+        s_idx = {v: i for i, v in enumerate(short_range)}
+        l_idx = {v: i for i, v in enumerate(long_range)}
+        for (s, l), sharpe in results.items():
+            mat[s_idx[s], l_idx[l]] = sharpe
+        return mat
+
+    sma_mat = build_matrix(sma_results, short_range, long_range)
+    ema_mat = build_matrix(ema_results, short_range, long_range)
+
+    fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+    fig.patch.set_facecolor(BG)
+    fig.suptitle(f"{ticker}  |  Walk-Forward Mean Test Sharpe  |  {start} → {end}",
+                 color=TEXT, fontsize=13, y=1.01)
+
+    for ax, mat, title in [
+        (axes[0], sma_mat, "SMA"),
+        (axes[1], ema_mat, "EMA"),
+    ]:
+        ax.set_facecolor(BG)
+
+        # Find global vmin/vmax ignoring NaN
+        vmin = np.nanmin(mat)
+        vmax = np.nanmax(mat)
+
+        im = ax.imshow(mat, aspect='auto', origin='lower',
+                       cmap='RdYlGn', vmin=vmin, vmax=vmax)
+
+        # Mark best cell
+        best_idx = np.unravel_index(np.nanargmax(mat), mat.shape)
+        ax.plot(best_idx[1], best_idx[0], marker='*', color='white',
+                markersize=14, zorder=5,
+                label=f"Best: short={short_range[best_idx[0]]}, long={long_range[best_idx[1]]} "
+                      f"(Sharpe={mat[best_idx]:.2f})")
+
+        ax.set_xticks(range(len(long_range)))
+        ax.set_xticklabels(long_range, rotation=45, ha='right', fontsize=7, color=MUTED)
+        ax.set_yticks(range(len(short_range)))
+        ax.set_yticklabels(short_range, fontsize=7, color=MUTED)
+        ax.set_xlabel("Long Window", color=MUTED, fontsize=10)
+        ax.set_ylabel("Short Window", color=MUTED, fontsize=10)
+        ax.set_title(f"{title} — Mean Test Sharpe", color=TEXT, fontsize=11, pad=10)
+
+        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.ax.yaxis.set_tick_params(color=MUTED, labelcolor=MUTED)
+
+        ax.legend(loc='upper right', facecolor="#1a202c", edgecolor="#2d3748",
+                  labelcolor=TEXT, fontsize=7)
+
+        for spine in ax.spines.values():
+            spine.set_edgecolor("#2d3748")
+        ax.tick_params(colors=MUTED)
+
+    plt.tight_layout()
+    os.makedirs("images", exist_ok=True)
+    s = start[:10].replace("-", "_")
+    e = end[:10].replace("-", "_")
+    fname = f"images/{ticker}_{s}_{e}_grid_search.png"
+    fig.savefig(fname, dpi=150, bbox_inches="tight", facecolor=BG)
+    plt.close(fig)
+    print(f"\n  [Chart saved] {fname}")
 
 
 if __name__ == "__main__":
