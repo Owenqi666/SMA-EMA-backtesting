@@ -273,18 +273,65 @@ Both strategies use the same signal logic. The key insight is that we detect the
 of crossover by comparing yesterday's relative position to today's — not just today's
 value alone.
 
-**Golden cross — buy signal:** fast MA crosses above slow MA, indicating an upward trend.
+Signal generation is based on the **percentage gap** between the short and long MA,
+defined as:
 
-$$S_{t-1} \leq L_{t-1} \quad \text{and} \quad S_t > L_t \implies \text{buy}$$
+$$g_t = \frac{S_t - L_t}{L_t}$$
 
-**Death cross — sell signal:** fast MA crosses below slow MA, indicating a downward trend.
+where $S_t$ is the short (fast) MA and $L_t$ is the long (slow) MA on day $t$. Using
+a relative gap rather than an absolute difference ensures the signal condition is
+scale-invariant — a $1\%$ separation means the same thing whether the stock trades
+at $\$20$ or $\$200$.
 
-$$S_{t-1} \geq L_{t-1} \quad \text{and} \quad S_t < L_t \implies \text{sell}$$
+**Golden cross — buy signal:** the gap crosses upward through the threshold $\theta$:
 
-where $S_t$ is the short (fast) MA and $L_t$ is the long (slow) MA on day $t$.
+$$g_{t-1} \leq \theta \quad \text{and} \quad g_t > \theta \implies \text{buy}$$
+
+**Death cross — sell signal:** the gap crosses downward through $-\theta$:
+
+$$g_{t-1} \geq -\theta \quad \text{and} \quad g_t < -\theta \implies \text{sell}$$
+
+When $\theta = 0$ this reduces to the classical crossover: a signal fires the moment
+the fast MA crosses the slow MA. When $\theta > 0$, the fast MA must pull away from
+the slow MA by more than $\theta$ before a signal is recorded. See the following
+section for the rationale.
 
 The strategy is fully invested when holding (all-in) and holds cash otherwise.
 No short selling.
+
+### Noise Filter — Crossover Threshold
+
+A plain crossover signal fires the instant the two moving averages change their
+relative order. In low-volatility or sideways markets, the two MAs hover close
+together and cross repeatedly over short intervals — each crossing generates a
+trade, but most of them reverse quickly. These are whipsaw trades: the signal is
+technically valid but economically meaningless, and each round trip incurs
+transaction costs.
+
+Market noise is inherently proportional. A daily fluctuation of 1% on a $\$50$
+stock and the same 1% on a $\$500$ stock represent the same economic signal
+strength, so the filter must operate in percentage terms. The threshold $\theta$
+is therefore expressed as a fraction of the long MA value, consistent with how
+the gap $g_t$ is defined.
+
+**Effect of raising $\theta$:**
+
+- Fewer trades — only sustained, decisive crossovers trigger signals
+- Reduced whipsaw losses in choppy markets
+- Slower entry and exit — the strategy lags further behind genuine trend changes
+- Risk of missing the early part of a move entirely if the gap never exceeds $\theta$
+
+The relationship between $\theta$ and window size matters. Smaller windows produce
+noisier MA series with larger short-term gaps, so a given $\theta$ has a stronger
+filtering effect on small-window strategies. Larger windows already smooth out
+short-term noise, so their gap series is quieter and a smaller $\theta$ is sufficient.
+This interaction is why $\theta$ is optimised jointly with the window sizes in
+`grid_search.py` rather than chosen independently.
+
+The default value is $\theta = 0$, preserving the classical crossover behaviour.
+The grid search evaluates $\theta \in \{0,\, 0.2\%,\, 0.5\%,\, 1.0\%,\, 2.0\%\}$
+alongside all window combinations, selecting the triple $(s,\, l,\, \theta)$ that
+maximises mean out-of-sample Sharpe across walk-forward windows.
 
 ### Trade Execution — T+1 Settlement
 
@@ -414,13 +461,27 @@ in 2023–2024.
 
 ## Parameter Optimisation
 
-`grid_search.py` performs an exhaustive search over:
+`grid_search.py` performs an exhaustive search over three parameters simultaneously:
 
-$$s \in \{5, 10, 15, \ldots, 55\}, \qquad l \in \{20, 30, 40, \ldots, 200\}$$
+$$s \in \{5, 10, 15, \ldots, 55\}, \qquad l \in \{20, 30, 40, \ldots, 200\}, \qquad \theta \in \{0,\, 0.002,\, 0.005,\, 0.01,\, 0.02\}$$
 
-where $s$ is the short window and $l$ is the long window. All combinations where
-$s \geq l$ are skipped. The objective function is the mean test Sharpe across all
-walk-forward windows.
+where $s$ is the short window, $l$ is the long window, and $\theta$ is the crossover
+threshold. All combinations where $s \geq l$ are skipped. The objective function is
+the mean out-of-sample Sharpe across all walk-forward windows.
+
+The three parameters are optimised jointly rather than independently because they
+interact: the noise-filtering effect of $\theta$ depends on how volatile the MA gap
+series is, which is itself determined by the window sizes. Optimising each dimension
+in isolation would miss this interaction and potentially select a $\theta$ that is
+either redundant or too aggressive given the chosen windows.
+
+The search space grows to approximately 450 combinations per strategy (versus ~90
+without $\theta$), which increases runtime by roughly 5× but produces results that
+account for realistic cost conditions including both transaction fees and signal noise.
+
+The heatmap output marginalises over $\theta$ — each cell displays the best Sharpe
+achieved across all threshold values for that $(s, l)$ pair. The top-5 results table
+shows the full three-parameter combination $(s,\, l,\, \theta)$ for each ranked entry.
 
 ### Walk-Forward Validation
 

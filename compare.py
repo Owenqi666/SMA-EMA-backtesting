@@ -49,6 +49,16 @@ def main():
     if fee_rate < 0:
         sys.exit("Error: fee rate cannot be negative.")
 
+    # input crossover threshold
+    try:
+        threshold_input = input("Crossover threshold (e.g. 0.005 for 0.5%, press Enter for default 0): ").strip()
+        threshold = float(threshold_input) if threshold_input else 0.0
+    except ValueError:
+        sys.exit("Please enter a valid number for threshold (e.g. 0.005).")
+
+    if threshold < 0:
+        sys.exit("Error: threshold cannot be negative.")
+
     # Download once, share between both strategies
     prices = load_prices(ticker, start, end)
     rf = get_risk_free_rate(start, end)
@@ -56,15 +66,15 @@ def main():
     # Run SMA backtest
     short_sma = moving_average(prices, short_w)
     long_sma = moving_average(prices, long_w)
-    sma_result = sma_backtest(prices, short_sma, long_sma, rf, fee_rate)
+    sma_result = sma_backtest(prices, short_sma, long_sma, rf, fee_rate, threshold)
 
     # Run EMA backtest
     short_ema = exp_moving_average(prices, short_w)
     long_ema = exp_moving_average(prices, long_w)
-    ema_result = ema_backtest(prices, short_ema, long_ema, rf, fee_rate)
+    ema_result = ema_backtest(prices, short_ema, long_ema, rf, fee_rate, threshold)
 
     # Print comparison table
-    print(f"\nTicker: {ticker}  |  Short window: {short_w}  |  Long window: {long_w}  |  Fee rate: {fee_rate:.4%} (one-way)")
+    print(f"\nTicker: {ticker}  |  Short window: {short_w}  |  Long window: {long_w}  |  Fee rate: {fee_rate:.4%} (one-way)  |  Threshold: {threshold:.4%}")
     print()
     print(f"{'Metric':<25} {'SMA':>10} {'EMA':>10}")
     print("-" * 45)

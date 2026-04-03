@@ -49,15 +49,26 @@ def main():
     if fee_rate < 0:
         sys.exit("Error: fee rate cannot be negative.")
 
+    # input crossover threshold
+    try:
+        threshold_input = input("Crossover threshold (e.g. 0.005 for 0.5%, press Enter for default 0): ").strip()
+        threshold = float(threshold_input) if threshold_input else 0.0
+    except ValueError:
+        sys.exit("Please enter a valid number for threshold (e.g. 0.005).")
+
+    if threshold < 0:
+        sys.exit("Error: threshold cannot be negative.")
+
     #Download prices and run backtest
     prices = load_prices(ticker, start, end)
     short_ema = exp_moving_average(prices, short_w)
     long_ema = exp_moving_average(prices, long_w)
     rf = get_risk_free_rate(start, end)
-    result = backtest(prices, short_ema, long_ema, rf, fee_rate)
+    result = backtest(prices, short_ema, long_ema, rf, fee_rate, threshold)
 
     print(f"\nTicker: {ticker}")
     print(f"Fee Rate (one-way): {fee_rate:.4%}")
+    print(f"Crossover Threshold: {threshold:.4%}")
     print(f"Strategy Return: {result['strategy_return']:+.2f}%")
     print(f"Buy & Hold Return: {result['bh_return']:+.2f}%")
     print(f"Max Drawdown: -{result['max_dd']:.2f}%")
@@ -115,7 +126,7 @@ def get_risk_free_rate(start, end):
     except Exception as e:
         sys.exit(f"Error: failed to download ^IRX ({e}).")
 
-def backtest(prices, short_ema, long_ema, rf, fee_rate=0.0005):
+def backtest(prices, short_ema, long_ema, rf, fee_rate=0.0005, threshold=0.0):
 
     # EMA is the same length as prices, so no trimming needed
     offset = 0
@@ -158,21 +169,21 @@ def backtest(prices, short_ema, long_ema, rf, fee_rate=0.0005):
 
         # Step 2: Detect today's crossover signal, queue for next day
         if i > 0:
-            previous_short = short_ema[i - 1]
-            previous_long  = long_ema[i - 1]
             current_short  = short_ema[i]
             current_long   = long_ema[i]
+            previous_short = short_ema[i - 1]
+            previous_long  = long_ema[i - 1]
 
-            # Golden cross — buy signal
-            if (previous_short <= previous_long
-                    and current_short > current_long
-                    and position == 0):
+            # Compute the percentage gap between short and long EMA
+            gap          = (current_short  - current_long)  / current_long
+            previous_gap = (previous_short - previous_long) / previous_long
+
+            # Golden cross — short EMA crosses above long EMA by more than threshold
+            if previous_gap <= threshold and gap > threshold and position == 0:
                 pending_order = 'buy'
 
-            # Death cross — sell signal
-            elif (previous_short >= previous_long
-                    and current_short < current_long
-                    and position == 1):
+            # Death cross — short EMA crosses below long EMA by more than threshold
+            elif previous_gap >= -threshold and gap < -threshold and position == 1:
                 pending_order = 'sell'
 
         # Step 3: Record today's total portfolio value

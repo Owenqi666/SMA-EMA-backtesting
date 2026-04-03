@@ -9,21 +9,24 @@ from ema import exp_moving_average, backtest as ema_backtest
 
 
 # Run a single backtest for a given strategy and return the result dict
-def run_backtest(prices, short_w, long_w, rf, strategy, fee_rate=0.0005):
+def run_backtest(prices, short_w, long_w, rf, strategy, fee_rate=0.0005, threshold=0.0):
     if strategy == 'SMA':
         short_ma = moving_average(prices, short_w)
         long_ma  = moving_average(prices, long_w)
-        return sma_backtest(prices, short_ma, long_ma, rf, fee_rate)
+        return sma_backtest(prices, short_ma, long_ma, rf, fee_rate, threshold)
     else:
         short_ma = exp_moving_average(prices, short_w)
         long_ma  = exp_moving_average(prices, long_w)
-        return ema_backtest(prices, short_ma, long_ma, rf, fee_rate)
+        return ema_backtest(prices, short_ma, long_ma, rf, fee_rate, threshold)
 
 
 # Scan all valid (short_w, long_w) combinations using walk-forward validation
 # Each pair is scored by mean out-of-sample Sharpe across all windows
-def walk_forward(prices, rf, strategy='SMA', fee_rate=0.0005, test_days=252, min_train_days=504):
+def walk_forward(prices, rf, strategy='SMA', fee_rate=0.0005, threshold_range=None, test_days=252, min_train_days=504):
     n = len(prices)
+
+    if threshold_range is None:
+        threshold_range = [0.0, 0.002, 0.005, 0.01, 0.02]
 
     # Build list of (train_end, test_end) index pairs
     windows = []
@@ -46,31 +49,35 @@ def walk_forward(prices, rf, strategy='SMA', fee_rate=0.0005, test_days=252, min
     long_range  = range(20, 210, 10)
 
     best_mean_sharpe = -999
-    best_params      = (0, 0)
+    best_params      = (0, 0, 0.0)
     all_results      = {}
 
     for short_w in short_range:
         for long_w in long_range:
             if short_w >= long_w:
                 continue
+            for threshold in threshold_range:
 
-            test_sharpes = []
-            for train_end, test_end in windows:
-                # Skip window if train data too short for the long window
-                if long_w >= train_end:
+                test_sharpes = []
+                for train_end, test_end in windows:
+                    # Skip window if train data too short for the long window
+                    if long_w >= train_end:
+                        continue
+                    result = run_backtest(
+                        prices[train_end:test_end],
+                        short_w, long_w, rf, strategy, fee_rate, threshold
+                    )
+                    test_sharpes.append(result['sharpe'])
+
+                if not test_sharpes:
                     continue
-                result = run_backtest(prices[train_end:test_end], short_w, long_w, rf, strategy, fee_rate)
-                test_sharpes.append(result['sharpe'])
 
-            if not test_sharpes:
-                continue
+                mean_sharpe = sum(test_sharpes) / len(test_sharpes)
+                all_results[(short_w, long_w, threshold)] = mean_sharpe
 
-            mean_sharpe = sum(test_sharpes) / len(test_sharpes)
-            all_results[(short_w, long_w)] = mean_sharpe
-
-            if mean_sharpe > best_mean_sharpe:
-                best_mean_sharpe = mean_sharpe
-                best_params      = (short_w, long_w)
+                if mean_sharpe > best_mean_sharpe:
+                    best_mean_sharpe = mean_sharpe
+                    best_params      = (short_w, long_w, threshold)
 
     return best_params, best_mean_sharpe, all_results
 
@@ -79,10 +86,10 @@ def walk_forward(prices, rf, strategy='SMA', fee_rate=0.0005, test_days=252, min
 def print_top_results(all_results, strategy, n=5):
     sorted_results = sorted(all_results.items(), key=lambda x: x[1], reverse=True)
     print(f"\nTop {n} {strategy} parameter combinations (mean test Sharpe):")
-    print(f"  {'Short':>6} {'Long':>6} {'Mean Sharpe':>12}")
-    print("  " + "-" * 26)
-    for (short_w, long_w), sharpe in sorted_results[:n]:
-        print(f"  {short_w:>6} {long_w:>6} {sharpe:>12.2f}")
+    print(f"  {'Short':>6} {'Long':>6} {'Threshold':>10} {'Mean Sharpe':>12}")
+    print("  " + "-" * 36)
+    for (short_w, long_w, threshold), sharpe in sorted_results[:n]:
+        print(f"  {short_w:>6} {long_w:>6} {threshold:>10.3%} {sharpe:>12.2f}")
 
 
 def main():
@@ -117,6 +124,7 @@ def main():
 
     print(f"\nTotal data: {len(prices)} trading days")
     print(f"Fee rate (one-way): {fee_rate:.4%}")
+    print(f"Threshold search space: [0%, 0.2%, 0.5%, 1.0%, 2.0%]")
 
     # Run walk-forward grid search for both strategies
     print("\nOptimising SMA via walk-forward...")
@@ -130,12 +138,12 @@ def main():
     ema_final = run_backtest(prices, *ema_best_params, rf, 'EMA', fee_rate)
 
     # Print summary table
-    print("\n" + "=" * 62)
-    print(f"{'':5} {'Params':>12} {'Mean Test Sharpe':>16} {'Full Sharpe':>12}")
-    print("-" * 62)
-    print(f"{'SMA':<5} {str(sma_best_params):>12} {sma_best_sharpe:>16.2f} {sma_final['sharpe']:>12.2f}")
-    print(f"{'EMA':<5} {str(ema_best_params):>12} {ema_best_sharpe:>16.2f} {ema_final['sharpe']:>12.2f}")
-    print("=" * 62)
+    print("\n" + "=" * 75)
+    print(f"{'':5} {'Params (s,l,θ)':>20} {'Mean Test Sharpe':>16} {'Full Sharpe':>12}")
+    print("-" * 75)
+    print(f"{'SMA':<5} {str(sma_best_params):>20} {sma_best_sharpe:>16.2f} {sma_final['sharpe']:>12.2f}")
+    print(f"{'EMA':<5} {str(ema_best_params):>20} {ema_best_sharpe:>16.2f} {ema_final['sharpe']:>12.2f}")
+    print("=" * 75)
 
     print_top_results(sma_results, 'SMA', n=5)
     print_top_results(ema_results, 'EMA', n=5)
@@ -153,20 +161,26 @@ def main():
 
 
 def plot_heatmaps(sma_results, ema_results, ticker, start, end):
-    """Plot side-by-side heatmaps of mean test Sharpe for SMA and EMA."""
+    """Plot side-by-side heatmaps of mean test Sharpe for SMA and EMA.
+    Each cell shows the best Sharpe achieved across all threshold values
+    for that (short_w, long_w) pair — i.e. marginalised over threshold."""
     BG   = "#0f1117"
     TEXT = "#e2e8f0"
     MUTED = "#718096"
 
+    # Extract unique window values from the 3-tuple keys
     short_range = sorted(set(k[0] for k in sma_results))
     long_range  = sorted(set(k[1] for k in sma_results))
 
     def build_matrix(results, short_range, long_range):
+        # For each (short_w, long_w) cell, take the best Sharpe across all thresholds
         mat = np.full((len(short_range), len(long_range)), np.nan)
         s_idx = {v: i for i, v in enumerate(short_range)}
         l_idx = {v: i for i, v in enumerate(long_range)}
-        for (s, l), sharpe in results.items():
-            mat[s_idx[s], l_idx[l]] = sharpe
+        for (s, l, _theta), sharpe in results.items():
+            r, c = s_idx[s], l_idx[l]
+            if np.isnan(mat[r, c]) or sharpe > mat[r, c]:
+                mat[r, c] = sharpe
         return mat
 
     sma_mat = build_matrix(sma_results, short_range, long_range)
@@ -174,7 +188,7 @@ def plot_heatmaps(sma_results, ema_results, ticker, start, end):
 
     fig, axes = plt.subplots(1, 2, figsize=(18, 7))
     fig.patch.set_facecolor(BG)
-    fig.suptitle(f"{ticker}  |  Walk-Forward Mean Test Sharpe  |  {start} → {end}",
+    fig.suptitle(f"{ticker}  |  Walk-Forward Mean Test Sharpe (best θ per cell)  |  {start} → {end}",
                  color=TEXT, fontsize=13, y=1.01)
 
     for ax, mat, title in [
