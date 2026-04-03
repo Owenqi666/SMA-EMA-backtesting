@@ -360,10 +360,7 @@ short-term noise, so their gap series is quieter and a smaller $\theta$ is suffi
 This interaction is why $\theta$ is optimised jointly with the window sizes in
 `grid_search.py` rather than chosen independently.
 
-The default value is $\theta = 0$, preserving the classical crossover behaviour.
-The grid search evaluates $\theta \in \{0,\, 0.2\%,\, 0.5\%,\, 1.0\%,\, 2.0\%\}$
-alongside all window combinations, selecting the triple $(s,\, l,\, \theta)$ that
-maximises mean out-of-sample Sharpe across walk-forward windows.
+The default value is $\theta = 0$, preserving the classical crossover behaviour. The grid search evaluates $\theta \in \\{0, 0.2\\%, 0.5\\%, 1.0\\%, 2.0\\%\\}$ alongside all window combinations, selecting the triple $(s, l, \theta)$ that maximises mean out-of-sample Sharpe across walk-forward windows.
 
 ### Trade Execution — T+1 Settlement
 
