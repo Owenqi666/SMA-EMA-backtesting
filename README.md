@@ -299,7 +299,9 @@ $$R_{\text{bh}} = \left(\frac{P_{\text{last}}}{P_{\text{first}}} - 1\right) \tim
 
 **Max Drawdown** — largest peak-to-trough decline in the equity curve:
 
-$$\text{MDD} = \max_{t} \frac{\text{peak}_t - V_t}{\text{peak}_t}, \qquad \text{peak}_t = \max_{s \leq t} V_s$$
+$$\text{MDD} = \max_{t} \left( \frac{\text{peak}_t - V_t}{\text{peak}_t} \right)$$
+
+$$\text{where} \quad \text{peak}_t = \max_{s \leq t} V_s$$
 
 **Sharpe Ratio** — risk-adjusted return, annualised using 252 trading days:
 
