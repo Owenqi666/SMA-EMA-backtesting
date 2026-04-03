@@ -1,6 +1,6 @@
 # SMA vs EMA Crossover Backtesting System
 
-A from-scratch quantitative backtesting system that implements Simple Moving Average (SMA) and Exponential Moving Average (EMA) crossover strategies, compares their risk-adjusted performance, and optimises parameters using grid search with train/test validation.
+A from-scratch quantitative backtesting system that implements Simple Moving Average (SMA) and Exponential Moving Average (EMA) crossover strategies, compares their risk-adjusted performance, and optimises parameters using walk-forward validation.
 
 Built without any financial libraries — all strategy logic, performance metrics, and optimisation are implemented in pure Python.
 
@@ -11,10 +11,10 @@ Built without any financial libraries — all strategy logic, performance metric
 ```
 sma-ema-backtest/
 ├── README.md
-├── project_fixed.py   ← SMA strategy: load, compute, backtest, metrics
+├── sma.py             ← SMA strategy: load, compute, backtest, metrics
 ├── ema.py             ← EMA strategy: same structure, different MA calculation
 ├── compare.py         ← Run both strategies side by side and print results
-└── grid_search.py     ← Parameter optimisation with train/test split
+└── grid_search.py     ← Parameter optimisation with walk-forward validation
 ```
 
 ---
@@ -22,7 +22,7 @@ sma-ema-backtest/
 ## Installation
 
 ```bash
-pip install yfinance
+pip install yfinance python-dateutil
 ```
 
 No other dependencies required. All metric calculations use the Python standard library.
@@ -31,14 +31,20 @@ No other dependencies required. All metric calculations use the Python standard 
 
 ## Usage
 
+All scripts accept a freely typed date range at runtime. The date parser recognises most common formats — `2016-01-01`, `Jan 1 2016`, and `1/1/2016` all work.
+
 ### Run SMA strategy only
 
 ```bash
-python project_fixed.py
+python sma.py
 ```
 
 ```
 Ticker (e.g. AAPL): AAPL
+Start date: 2016-01-01
+  -> Parsed as 2016-01-01
+End date: 2026-01-01
+  -> Parsed as 2026-01-01
 Short MA window (e.g. 20): 20
 Long MA window (e.g. 50): 50
 ```
@@ -55,67 +61,75 @@ python ema.py
 python compare.py
 ```
 
-Example output:
+Results on AAPL (2016-01-01 to 2026-01-01), short window 20, long window 50:
 
 ```
+Loaded 2514 trading days for AAPL (2016-01-01 to 2026-01-01).
+  [Risk-free] Average 3-month T-bill yield (2016-01-01 to 2026-01-01): 2.16%
+
 Ticker: AAPL  |  Short window: 20  |  Long window: 50
 
 Metric                          SMA        EMA
 ---------------------------------------------
-Strategy Return (%)           12.34      15.67
-Buy & Hold Return (%)         18.50      18.50
-Max Drawdown (%)             -23.10     -19.80
-Sharpe Ratio                   0.45       0.61
-Total Trades                      8         12
+Strategy Return (%)          359.20     404.43
+Buy & Hold Return (%)       1046.73    1044.52
+Max Drawdown (%)             -29.09     -25.30
+Sharpe Ratio                   0.77       0.77
+Total Trades                     55         45
 
 Winner by metric:
   Strategy Return : EMA
   Max Drawdown    : EMA  (lower is better)
   Sharpe Ratio    : EMA
-  Total Trades    : SMA  (fewer is cheaper)
+  Total Trades    : EMA  (fewer is cheaper)
 ```
 
-### Grid search parameter optimisation
+### Walk-forward grid search
 
 ```bash
 python grid_search.py
 ```
 
-Scans 200+ window combinations on the training set (2020–2022), then evaluates the best parameters on an unseen test set (2023–2024).
-
-Results on AAPL (2020-01-01 to 2024-12-31):
+Results on AAPL (2016-01-01 to 2026-01-01):
 
 ```
-Loaded 1257 trading days for AAPL (2020-01-01 to 2024-12-31).
+Loaded 2514 trading days for AAPL (2016-01-01 to 2026-01-01).
+  [Risk-free] Average 3-month T-bill yield (2016-01-01 to 2026-01-01): 2.16%
 
-Train: 754 days  |  Test: 503 days
+Total data: 2514 trading days
 
-=======================================================
-            Params  Train Sharpe   Test Sharpe
--------------------------------------------------------
-SMA         (5, 30)          0.99          0.66
-EMA         (5, 20)          0.98          1.03
-=======================================================
+Optimising SMA via walk-forward...
+  Walk-forward: 7 windows, test window = 252 days, min train = 504 days
 
-Top 5 SMA parameter combinations (train set):
-  Short   Long   Sharpe
-  ----------------------
-      5     30     0.99
-      5     20     0.90
-     50    100     0.89
-     15     20     0.89
-     55    100     0.86
+Optimising EMA via walk-forward...
+  Walk-forward: 7 windows, test window = 252 days, min train = 504 days
 
-Top 5 EMA parameter combinations (train set):
-  Short   Long   Sharpe
-  ----------------------
-      5     20     0.98
-     10     20     0.86
-      5    190     0.78
-      5    200     0.78
-      5    140     0.71
+==============================================================
+            Params  Mean Test Sharpe   Full Sharpe
+--------------------------------------------------------------
+SMA         (5, 30)             1.25          1.07
+EMA         (5, 20)             1.30          1.25
+==============================================================
 
-Overall winner (by test Sharpe): EMA  (1.03 vs 0.66)
+Top 5 SMA parameter combinations (mean test Sharpe):
+  Short   Long   Mean Sharpe
+  --------------------------
+      5     30          1.25
+     10     80          1.25
+      5     20          1.23
+      5     70          1.23
+      5     80          1.22
+
+Top 5 EMA parameter combinations (mean test Sharpe):
+  Short   Long   Mean Sharpe
+  --------------------------
+      5     20          1.30
+     10     20          1.20
+      5    180          1.10
+      5    170          1.07
+      5    140          1.07
+
+Overall winner (by mean test Sharpe): EMA  (1.30 vs 1.25)
 ```
 
 ---
@@ -168,11 +182,15 @@ $$R_{\text{bh}} = \left(\frac{P_{\text{last}}}{P_{\text{first}}} - 1\right) \tim
 
 $$\text{MDD} = \max_{t} \frac{\text{peak}_t - V_t}{\text{peak}_t}, \qquad \text{peak}_t = \max_{s \leq t} V_s$$
 
-**Sharpe Ratio** — risk-adjusted return, measuring excess return earned per unit of risk, annualised using 252 trading days:
+**Sharpe Ratio** — risk-adjusted return measuring excess return per unit of risk, annualised using 252 trading days:
 
 $$\text{Sharpe} = \frac{\mu - r_f / 252}{\sigma} \times \sqrt{252}$$
 
-where $\mu$ is the mean daily return, $\sigma$ is its standard deviation, and $r_f = 0.05$ by default.
+where $\mu$ is the mean daily return, $\sigma$ is the sample standard deviation of daily returns, and $r_f$ is the risk-free rate sourced from the average 3-month US Treasury bill yield (`^IRX`) over the backtest period.
+
+Using the realised T-bill yield rather than a fixed constant matters because the risk-free rate varied substantially across the decade — from near zero during 2020–2021 to above 5% in 2023–2024. A fixed value would systematically overstate or understate excess returns depending on the period chosen.
+
+The sample standard deviation divides by $n - 1$ rather than $n$, which gives an unbiased estimate of the true return volatility when working with a historical sample.
 
 | Sharpe      | Interpretation          |
 |-------------|-------------------------|
@@ -189,19 +207,25 @@ where $\mu$ is the mean daily return, $\sigma$ is its standard deviation, and $r
 
 $$s \in \{5, 10, 15, \ldots, 55\}, \qquad l \in \{20, 30, 40, \ldots, 200\}$$
 
-where $s$ is the short window and $l$ is the long window. All combinations where $s \geq l$ are skipped. The objective function is the Sharpe ratio.
+where $s$ is the short window and $l$ is the long window. All combinations where $s \geq l$ are skipped. The objective function is the mean test Sharpe across all walk-forward windows.
 
-### Train/Test Split
+### Walk-Forward Validation
 
-To guard against overfitting, the data is split before optimisation:
+A single train/test split is inadequate for strategy optimisation because financial markets cycle through distinct regimes — bull markets, bear markets, high-volatility periods, and low-volatility periods — each of which rewards different parameter choices. Parameters optimised on one regime frequently collapse when the regime shifts, producing the large Sharpe drops commonly seen with naive train/test splits.
+
+Walk-forward validation addresses this by rolling a one-year test window across the full dataset:
 
 ```
-Full data  2020–2024
-  ├── Train  60%  2020–2022  ← grid search runs here
-  └── Test   40%  2023–2024  ← best params evaluated here
+Window 1: train 2016–2017  →  test 2018
+Window 2: train 2016–2018  →  test 2019
+Window 3: train 2016–2019  →  test 2020
+Window 4: train 2016–2020  →  test 2021
+Window 5: train 2016–2021  →  test 2022
+Window 6: train 2016–2022  →  test 2023
+Window 7: train 2016–2023  →  test 2024
 ```
 
-A large drop in Sharpe from train to test suggests the parameters are overfit to historical data and may not generalise to new market conditions.
+Each parameter pair receives one out-of-sample Sharpe per window. The final score is the mean across all windows, which spans multiple market regimes — the 2018 correction, the 2020 crash, the 2022 rate-hike bear market, and the subsequent recovery. Parameters that score consistently across these environments are genuinely robust, not just well-fitted to a single historical episode.
 
 ---
 
@@ -209,5 +233,5 @@ A large drop in Sharpe from train to test suggests the parameters are overfit to
 
 - **Lookahead bias:** closing prices are used for both signal generation and trade execution on the same day. In practice, execution would occur the following open.
 - **No transaction costs:** brokerage fees and slippage are not modelled.
-- **In-sample risk:** even with a train/test split, both sets are drawn from the same 5-year period and may share market regime characteristics.
 - **Single asset:** the system is designed for one ticker at a time.
+- **US-centric risk-free rate:** `^IRX` reflects US Treasury yields. For non-US assets, a local equivalent should be substituted.
