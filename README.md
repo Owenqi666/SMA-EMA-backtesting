@@ -126,15 +126,14 @@ Total Fee Cost               -0.1122    -0.4992
 
 *Benchmark configuration: fee rate 0.05% one-way, threshold 0%, T+1 execution.*
 
-**Equity curve:** The gap is far more dramatic than AAPL. Buy & hold turned \$1 into
-\$237×, while SMA only reached \$14.16× and EMA \$75.49×. NVDA's entire return is
+**Equity curve:** The gap is far more dramatic than AAPL. Buy & hold turned 1.0 of initial capital into 237×, while SMA only reached 14.16× and EMA 75.49×. NVDA's entire return is
 concentrated in the AI boom of 2023–2024, where the price surged parabolically. Both
 strategies were repeatedly stopped out during this explosive phase by death crosses,
 re-entering at progressively higher prices and missing most of the move. EMA
-dramatically outperformed SMA (\$75.49× vs \$14.16×) because its faster response
+dramatically outperformed SMA (75.49× vs 14.16×) because its faster response
 allowed re-entry sooner after each pullback. The fee drag on EMA is notably higher
 (-0.4992 vs -0.1122) — a consequence of its much larger position size at each trade
-during the price surge, where 0.05% of a \$75× portfolio is a meaningful absolute cost.
+during the price surge, where 0.05% of a 75× portfolio is a meaningful absolute cost.
 
 **Signal chart:** The first 1,500 days show dense signals at very low price levels —
 a long period of low-price sideways movement generating noise. The real money was in
@@ -180,11 +179,11 @@ drawdown, a result more pronounced than in the previous model due to EMA's lower
 count reducing fee drag (32 vs 43 trades, fee cost -0.0443 vs -0.0731).
 
 The mechanism is visible in the equity curve. Around Day 1,500 (early 2022), META's
-price peaked near \$370 and began a steep decline to below \$100. The death cross
+price peaked near USD 370 and began a steep decline to below USD 100. The death cross
 triggered a sell signal near the top of this move, keeping the strategy in cash through
 most of the 76% drawdown. When the golden cross appeared in mid-2023, the strategy
 re-entered near the bottom of the recovery, capturing the full subsequent rally to
-\$650+. Buy & hold suffered the full crash and only recovered later.
+USD 650+. Buy & hold suffered the full crash and only recovered later.
 
 **Signal chart:** EMA's signal chart shows notably cleaner entries and exits around
 the 2022 crash compared to SMA. EMA identified the death cross earlier and the golden
@@ -313,7 +312,7 @@ $$g_t = \frac{S_t - L_t}{L_t}$$
 where $S_t$ is the short (fast) MA and $L_t$ is the long (slow) MA on day $t$. Using
 a relative gap rather than an absolute difference ensures the signal condition is
 scale-invariant — a $1\%$ separation means the same thing whether the stock trades
-at \$20 or \$200.
+at USD 20 or USD 200.
 
 **Golden cross — buy signal:** the gap crosses upward through the threshold $\theta$:
 
@@ -340,9 +339,9 @@ trade, but most of them reverse quickly. These are whipsaw trades: the signal is
 technically valid but economically meaningless, and each round trip incurs
 transaction costs.
 
-Market noise is inherently proportional. A daily fluctuation of 1% on a \$50
-stock and the same 1% on a \$500 stock represent the same economic signal
-strength, so the filter must operate in percentage terms. The threshold $\theta$
+Market noise is inherently proportional. A daily fluctuation of 1% on a
+USD 50 stock and the same 1% on a USD 500 stock represent the same economic
+signal strength, so the filter must operate in percentage terms. The threshold $\theta$
 is therefore expressed as a fraction of the long MA value, consistent with how
 the gap $g_t$ is defined.
 
