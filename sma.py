@@ -1,16 +1,23 @@
 import sys
-import csv
 import math
 import yfinance as yf
+from dateutil import parser as dateparser
 
 def main():
     print("Simple Moving Average Crossover Backtest")
     print("------------------------------------------")
-    
+
     #input ticker
     ticker = input("Ticker (e.g. AAPL): ").strip().upper()
     if not ticker:
         sys.exit("Error: ticker cannot be empty.")
+
+    # input dates
+    start, start_dt = parse_date("Start date: ")
+    end, end_dt = parse_date("End date: ")
+
+    if end_dt <= start_dt:
+        sys.exit(f"Error: start date ({start}) must be before end date ({end}).")
 
     #input windows
     try:
@@ -29,10 +36,11 @@ def main():
         )
 
     #Download prices and run backtest
-    prices = load_prices(ticker, "2020-01-01", "2024-12-31")
+    prices = load_prices(ticker, start, end)
     short_ma = moving_average(prices, short_w)
     long_ma = moving_average(prices, long_w)
-    result = backtest(prices, short_ma, long_ma)
+    rf = get_risk_free_rate(start, end)
+    result = backtest(prices, short_ma, long_ma, rf)
 
     print(f"\nTicker: {ticker}")
     print(f"Strategy Return: {result['strategy_return']:+.2f}%")
@@ -41,6 +49,14 @@ def main():
     print(f"Sharpe Ratio: {result['sharpe']:.2f}")
     print(f"Total Trades: {result['trades']}")
 
+def parse_date(prompt):
+    raw = input(prompt).strip()
+    dt = dateparser.parse(raw)
+    if dt is None:
+        sys.exit(f"Error: cannot parse date '{raw}'. Try YYYY-MM-DD (e.g. 2020-01-01).")
+    date_str = dt.strftime('%Y-%m-%d')
+    print(f"  -> Parsed as {date_str}")
+    return date_str, dt
 
 # Download daily OHLCV data
 def load_prices(ticker, start, end):
@@ -50,32 +66,37 @@ def load_prices(ticker, start, end):
             f"No data found for '{ticker}'. "
             "Check the ticker symbol and your internet connection."
         )
-    
     prices = data["Close"].squeeze().dropna().tolist()
     if len(prices) < 2:
         raise ValueError(
             f"Only {len(prices)} trading day(s) found for '{ticker}' "
             f"between {start} and {end}. Need at least 2."
         )
-    
     print(f"Loaded {len(prices)} trading days for {ticker} ({start} to {end}).")
     return prices
 
-
 def moving_average(prices, window):
-
     if window < 1 or window > len(prices):
         raise ValueError(
             f"Window {window} is invalid: must be between 1 and {len(prices)}."
         )
-    
     return [
         sum(prices[i - window:i]) / window
         for i in range(window, len(prices) + 1)
     ]
-    
-def backtest(prices, short_ma, long_ma):
 
+def get_risk_free_rate(start, end):
+    try:
+        irx = yf.download("^IRX", start=start, end=end, progress=False, auto_adjust=True)
+        if irx.empty:
+            sys.exit("Error: no ^IRX data returned. Check your date range and internet connection.")
+        rate = float(irx["Close"].squeeze().dropna().mean()) / 100
+        print(f"  [Risk-free] Average 3-month T-bill yield ({start} to {end}): {rate:.2%}")
+        return rate
+    except Exception as e:
+        sys.exit(f"Error: failed to download ^IRX ({e}).")
+
+def backtest(prices, short_ma, long_ma, rf):
     #Trim the front of short_ma so both series are aligned to the same dates
     offset = len(prices) - len(long_ma)
     short_ma = short_ma[len(short_ma) - len(long_ma):]
@@ -109,7 +130,7 @@ def backtest(prices, short_ma, long_ma):
                 shares = 0
                 position = 0
                 trades += 1
-        
+
         #Record today's total portfolio value (cash + market value of shares)
         current_value = cash + shares * price
         equity.append(current_value)
@@ -122,7 +143,7 @@ def backtest(prices, short_ma, long_ma):
     strategy_return = (cash - 1.0) * 100
     bh_return = (prices[-1] / prices[offset] - 1) * 100
     max_dd = max_drawdown(equity) * 100
-    sharpe = sharpe_ratio(equity)
+    sharpe = sharpe_ratio(equity, rf)
 
     return {
         "strategy_return": strategy_return,
@@ -135,36 +156,28 @@ def backtest(prices, short_ma, long_ma):
 def max_drawdown(equity):
     peak = equity[0]
     max_dd = 0.0
-
     for val in equity:
         if val > peak:
             peak = val
         dd = (peak - val) / peak
         if dd > max_dd:
             max_dd = dd
-
     return max_dd
 
-def sharpe_ratio(equity, risk_free=0.05):
-
+def sharpe_ratio(equity, rf):
     if len(equity) < 2:
         return 0.0
-
     daily_returns = [
         (equity[i] - equity[i - 1]) / equity[i - 1]
         for i in range(1, len(equity))
     ]
-
-    rf_daily = risk_free / 252
+    rf_daily = rf / 252
     avg = sum(daily_returns) / len(daily_returns)
     excess = avg - rf_daily
-
-    variance = sum((r - avg) ** 2 for r in daily_returns) / len(daily_returns)
+    variance = sum((r - avg) ** 2 for r in daily_returns) / (len(daily_returns) - 1)
     std = math.sqrt(variance)
-
     if std == 0:
         return 0.0
-
     return (excess / std) * math.sqrt(252)
 
 if __name__ == "__main__":

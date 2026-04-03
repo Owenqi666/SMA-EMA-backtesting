@@ -1,5 +1,5 @@
 import sys
-from sma import load_prices, moving_average, backtest as sma_backtest
+from sma import load_prices, moving_average, backtest as sma_backtest, parse_date, get_risk_free_rate
 from ema import exp_moving_average, backtest as ema_backtest
 
 
@@ -11,6 +11,13 @@ def main():
     ticker = input("Ticker (e.g. AAPL): ").strip().upper()
     if not ticker:
         sys.exit("Error: ticker cannot be empty.")
+
+    # input dates
+    start, start_dt = parse_date("Start date: ")
+    end, end_dt = parse_date("End date: ")
+
+    if end_dt <= start_dt:
+        sys.exit(f"Error: start date ({start}) must be before end date ({end}).")
 
     #input windows
     try:
@@ -29,17 +36,18 @@ def main():
         )
 
     # Download once, share between both strategies
-    prices = load_prices(ticker, "2020-01-01", "2024-12-31")
+    prices = load_prices(ticker, start, end)
+    rf = get_risk_free_rate(start, end)
 
     # Run SMA backtest
     short_sma = moving_average(prices, short_w)
     long_sma = moving_average(prices, long_w)
-    sma_result = sma_backtest(prices, short_sma, long_sma)
+    sma_result = sma_backtest(prices, short_sma, long_sma, rf)
 
     # Run EMA backtest
     short_ema = exp_moving_average(prices, short_w)
     long_ema = exp_moving_average(prices, long_w)
-    ema_result = ema_backtest(prices, short_ema, long_ema)
+    ema_result = ema_backtest(prices, short_ema, long_ema, rf)
 
     # Print comparison table
     print(f"\nTicker: {ticker}  |  Short window: {short_w}  |  Long window: {long_w}")
@@ -59,7 +67,6 @@ def main():
         sma_val = sma_result[key]
         ema_val = ema_result[key]
 
-        # trades is an integer, everything else is a float
         if key == "trades":
             print(f"{label:<25} {sma_val:>10} {ema_val:>10}")
         elif key == "max_dd":
