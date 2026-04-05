@@ -486,13 +486,20 @@ and Sharpe, shifting optimal windows toward larger values versus a zero-fee run.
 
 ### Performance Metrics
 
-**Strategy Return:** $R = (C_{\text{final}} - 1) \times 100$
+**Strategy Return**
 
-**Buy and Hold Return:** $R_{\text{bh}} = \left(\frac{P_{\text{last}}}{P_{\text{first}}} - 1\right) \times 100$
+$$R = (C_{\text{final}} - 1) \times 100$$
 
-**Max Drawdown:** $\text{MDD} = \max_{t} \left( \frac{\text{peak}_t - V_t}{\text{peak}_t} \right)$
+**Buy and Hold Return**
 
-**Sharpe Ratio (annualised):**
+$$R_{\text{bh}} = \left(\frac{P_{\text{last}}}{P_{\text{first}}} - 1\right) \times 100$$
+
+**Max Drawdown**
+
+$$\text{MDD} = \max_{t} \left( \frac{\text{peak}_t - V_t}{\text{peak}_t} \right)$$
+
+**Sharpe Ratio (annualised)**
+
 $$\text{Sharpe} = \frac{\mu_d - r_f / 252}{\sigma_d} \times \sqrt{252}$$
 
 where $\mu_d$ is mean daily return, $\sigma_d$ is sample standard deviation, and $r_f$
